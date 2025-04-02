@@ -1,0 +1,5 @@
+{
+  "transformation": "Analyze the SAP BW transformation diagram. Identify source/target mapping and transformation rules.",
+  "loading": "Compare two SAP BW data loading process flows. Note changes in data sources, targets, or steps.",
+  "process_chain": "Analyze SAP BW process chains. List steps and highlight missing or changed tasks."
+}
