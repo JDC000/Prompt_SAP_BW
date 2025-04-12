@@ -1,0 +1,17 @@
+PROMPTS = {
+  "ABAP Dictionary": "Extrahieren Sie aus der folgenden ABAP-Datentabelle nur die technisch relevanten Felder (ohne benutzerspezifische Codes) und geben Sie das Ergebnis im JSON-Format zurück.\nAnforderungen:\n\nIgnorieren Sie alle Felder mit:\nPräfixen wie /BIC/ oder /BI0/ (z. B. /BIC/TE9_056FB).\n\nExtrahieren Sie für jedes Feld:\nFeldname (field_name)\nPrimärschlüssel-Kennzeichen (is_key: true/false, basierend auf \"✔\")\nData-Element (data_element)\nDatentyp (data_type)\nLänge (length)\nDezimalstellen (decimals)\n\nFormat:\nJSON-Array mit allen extrahierten Feldern.",
+  "Data Source": "Compare two SAP BW data loading process flows. Note changes in data sources, targets, or steps.",
+  "Datenvorschau": "Analyze SAP BW process chains. List steps and highlight missing or changed tasks.",
+  "DTP": "Compare two SAP BW data loading process flows. Note changes in data sources, targets, or steps.",
+  "Bewegungsdaten": "Compare two SAP BW data loading process flows. Note changes in data sources, targets, or steps.",
+  "Composite Provider": "Compare two SAP BW data loading process flows. Note changes in data sources, targets, or steps.",
+  "Data Flow Object": "Compare two SAP BW data loading process flows. Note changes in data sources, targets, or steps.",
+  "Excel": "Compare two SAP BW data loading process flows. Note changes in data sources, targets, or steps.",
+  "Query": "Compare two SAP BW data loading process flows. Note changes in data sources, targets, or steps.",
+  "Transformationen": "Compare two SAP BW data loading process flows. Note changes in data sources, targets, or steps."
+
+}
+
+def get_prompt(photo_type: str) -> str:
+    print("Loại ảnh người dùng chọn:", photo_type)
+    return PROMPTS.get(photo_type, "Mô tả ảnh và trả về JSON.")

@@ -1,24 +1,35 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, File, Form, UploadFile
+
+from backend.app.models import CompareRequest, CompareResponse
+from backend.app.openrouter_client import generate_json_from_image, compare_jsons
+
+app = FastAPI()
+
+@app.post("/compare")
+async def compare_images(
+    image_1: UploadFile = File(...),
+    image_2: UploadFile = File(...),
+    photo_type: str = Form(...)
+):
+    try:
+        json1 = generate_json_from_image(await image_1.read(), photo_type)
+        json2 = generate_json_from_image(await image_2.read(), photo_type)
+        diffs = compare_jsons(json1, json2)
+
+        return {
+            "image_1_json": json1,
+            "image_2_json": json2,
+            "differences": diffs
+        }
+
+    except Exception as e:
+        return {"error": f"Lỗi khi so sánh ảnh: {str(e)}"}
 from fastapi.middleware.cors import CORSMiddleware
-from app.models.schemas import CompareRequest, CompareResponse
-from app.services.image_compare_qwen import compare_images
 
-app = FastAPI(
-    title="SAP BW Image Comparison",
-    description="Compare SAP BW diagrams using Qwen-VL 2.5",
-    version="1.0.0"
-)
-
-# CORS setup
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # hoặc ["http://localhost:5173"]
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-@app.post("/compare", response_model=CompareResponse)
-def compare(req: CompareRequest):
-    result = compare_images(req.photo_type, req.image1_base64, req.image2_base64)
-    return result
