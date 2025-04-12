@@ -1,6 +1,11 @@
 import React from 'react';
 
-function ImageUploader({ label, onChange }: { label: string; onChange: (file: File) => void }) {
+type Props = {
+  label: string;
+  onChange: (file: File) => void;
+};
+
+function ImageUploader({ label, onChange }: Props) {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
