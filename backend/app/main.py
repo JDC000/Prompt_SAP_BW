@@ -1,7 +1,12 @@
 from fastapi import FastAPI, File, Form, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 import base64
-from backend.app.openrouter_client import client  # ✅ dùng instance
+from backend.app.openrouter_client import client
+from dotenv import load_dotenv
+load_dotenv()
+
+
+
 
 app = FastAPI()
 
