@@ -11,7 +11,7 @@ export async function compareImages(
   formData.append('photo_type', photoType);
 
   try {
-    const response = await axios.post("http://localhost:8000/compare", formData, {
+    const response = await axios.post("http://127.0.0.1:8000/compare", formData,{
       headers: {
         'Content-Type': 'multipart/form-data',
       },

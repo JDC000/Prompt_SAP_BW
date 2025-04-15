@@ -6,8 +6,7 @@ function PhotoTypeSelector({ onSelect }: Props) {
   return (
     <div style={{ marginBottom: '1rem' }}>
       <label>Phototyp auswählen:</label>
-      <select onChange={(e: React.ChangeEvent<HTMLSelectElement>) => onSelect(e.target.value)}>
-
+      <select onChange={(e) => onSelect(e.target.value)}>
         <option value="">-- auswählen --</option>
         <option value="ABAP Dictionary">ABAP Dictionary</option>
         <option value="Data Source">Data Source</option>

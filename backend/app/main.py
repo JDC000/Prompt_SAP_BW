@@ -29,7 +29,7 @@ async def compare_images(
         img2_bytes = await image_2.read()
 
         img1_b64 = f"data:image/png;base64,{base64.b64encode(img1_bytes).decode()}"
-        img2_b64 = f"data:image/png;base64,{base64.b64encode(img1_bytes).decode()}"
+        img2_b64 = f"data:image/png;base64,{base64.b64encode(img2_bytes).decode()}"
 
 
         json1 = client.generate_json_from_image(img1_b64, photo_type)
