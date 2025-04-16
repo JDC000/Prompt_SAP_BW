@@ -32,7 +32,7 @@ class OpenRouterClient:
             "X-Title": os.getenv("APP_TITLE", "SAP BW Image Comparator"),
             "Content-Type": "application/json"
         }
-        self.model = "qwen/qwen2.5-vl-32b-instruct"
+        self.model = "qwen/qwen2.5-vl-3b-instruct:free"
         self.max_tokens = 2048  # Increased for complex responses
         self.max_retries = 3
         self.timeout = 30  # seconds
@@ -103,18 +103,26 @@ class OpenRouterClient:
                     timeout=self.timeout
                 )
 
-                raw_output = response.choices[0].message.content.strip()
-                logger.debug(f"Raw API response: {raw_output[:200]}...")  # Log first part
+                if response and response.choices and len(response.choices) > 0 and response.choices[0].message and response.choices[0].message.content:
+                    raw_output = response.choices[0].message.content.strip()
+                    logger.debug(f"Raw API response: {raw_output[:200]}...")  # Log first part
 
-                parsed = self._extract_json(raw_output)
-                if parsed:
-                    return parsed
+                    parsed = self._extract_json(raw_output)
+                    if parsed:
+                        return parsed
 
-                return {
-                    "error": "Invalid JSON response",
-                    "raw_output": raw_output,
-                    "suggestion": "The model returned malformed JSON. Please try again."
-                }
+                    return {
+                        "error": "Invalid JSON response",
+                        "raw_output": raw_output,
+                        "suggestion": "The model returned malformed JSON. Please try again."
+                    }
+                else:
+                    logger.error(f"Empty or malformed response from OpenRouter (attempt {attempt + 1}): {response}")
+                    if attempt == self.max_retries - 1:
+                        return {
+                            "error": "Empty response from API after retries",
+                            "raw_response": str(response)
+                        }
 
             except json.JSONDecodeError as je:
                 logger.error(f"JSON decode error (attempt {attempt + 1}): {str(je)}")
@@ -122,7 +130,7 @@ class OpenRouterClient:
                     return {
                         "error": "JSON parsing failed after retries",
                         "exception": str(je),
-                        "raw_output": raw_output
+                        "raw_output": raw_output if 'raw_output' in locals() else None
                     }
 
             except Exception as e:
