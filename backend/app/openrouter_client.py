@@ -20,7 +20,7 @@ class OpenRouterClient:
     def __init__(self):
         api_key = os.getenv("OPENROUTER_API_KEY")
         if not api_key:
-            raise EnvironmentError("OPENROUTER_API_KEY is missing from environment variables")
+            raise EnvironmentError("OPENROUTER_API_KEY fehlt in den Umgebungsvariablen.")
 
         self.client = OpenAI(
             base_url="https://openrouter.ai/api/v1",
@@ -49,12 +49,12 @@ class OpenRouterClient:
         # Validate base64 format
         try:
             if not re.match(r'^[A-Za-z0-9+/]+={0,2}$', base64_img):
-                raise ValueError("Invalid base64 characters")
+                raise ValueError("Ungültige Base64-Zeichen")
 
             # Add proper image prefix
             return f"data:image/png;base64,{base64_img}"
         except Exception as e:
-            logger.error(f"Image validation failed: {str(e)}")
+            logger.error(f"Bildvalidierung fehlgeschlagen: {str(e)}")
             return None
 
     def _extract_json(self, raw_text: str) -> Optional[Union[Dict, List]]:
@@ -69,7 +69,7 @@ class OpenRouterClient:
                 try:
                     return json.loads(json_match.group())
                 except json.JSONDecodeError as je:
-                    logger.warning(f"JSON extraction failed: {str(je)}")
+                    logger.warning(f"JSON-Extraktion fehlgeschlagen: {str(je)}")
                     return None
         return None
 
@@ -78,11 +78,11 @@ class OpenRouterClient:
         prepared_image = self._prepare_image_data(base64_img)
         if not prepared_image:
             return {
-                "error": "Invalid image format",
-                "details": "Base64 image validation failed"
+                "error": "Ungültiges Bildformat",
+                "details": "Base64-Bildvalidierung fehlgeschlagen"
             }
 
-        prompt = f"{get_prompt(photo_type)}\nChỉ trả về JSON theo cấu trúc quy định, không có text thừa."
+        prompt = f"{get_prompt(photo_type)}\nGeben Sie nur JSON gemäß der festgelegten Struktur zurück, ohne zusätzlichen Text."
 
         for attempt in range(self.max_retries):
             try:
@@ -105,43 +105,45 @@ class OpenRouterClient:
 
                 if response and response.choices and len(response.choices) > 0 and response.choices[0].message and response.choices[0].message.content:
                     raw_output = response.choices[0].message.content.strip()
-                    logger.debug(f"Raw API response: {raw_output[:200]}...")  # Log first part
+                    logger.debug(f"Roh-API-Antwort: {raw_output[:200]}...")  # Log first part
 
                     parsed = self._extract_json(raw_output)
                     if parsed:
                         return parsed
 
                     return {
-                        "error": "Invalid JSON response",
+                        "error": "Ungültige JSON-Antwort",
                         "raw_output": raw_output,
-                        "suggestion": "The model returned malformed JSON. Please try again."
+                        "suggestion": "Das Modell hat ein fehlerhaftes JSON zurückgegeben. Bitte versuchen Sie es erneut."
                     }
                 else:
-                    logger.error(f"Empty or malformed response from OpenRouter (attempt {attempt + 1}): {response}")
+                    logger.error(f"Leere oder fehlerhafte Antwort von OpenRouter (Versuch {attempt + 1}): {response}")
                     if attempt == self.max_retries - 1:
                         return {
-                            "error": "Empty response from API after retries",
+                            "error": "Leere Antwort von der API nach mehreren Versuchen",
                             "raw_response": str(response)
                         }
 
             except json.JSONDecodeError as je:
-                logger.error(f"JSON decode error (attempt {attempt + 1}): {str(je)}")
+                logger.error(f"JSON-Decodierungsfehler (Versuch {attempt + 1}): {str(je)}")
                 if attempt == self.max_retries - 1:
                     return {
-                        "error": "JSON parsing failed after retries",
+                        "error": "JSON-Parsing fehlgeschlagen nach mehreren Versuchen",
                         "exception": str(je),
                         "raw_output": raw_output if 'raw_output' in locals() else None
                     }
 
             except Exception as e:
-                logger.error(f"API call failed (attempt {attempt + 1}): {str(e)}")
+
+                logger.error(f"API-Aufruf fehlgeschlagen (Versuch {attempt + 1}): {str(e)}")
+
                 if attempt == self.max_retries - 1:
                     return {
-                        "error": "API request failed",
+
+                        "error": "API-Anfrage fehlgeschlagen",
                         "exception": str(e)
                     }
-
-        return {"error": "Max retries exceeded"}
+        return {"error": "Maximale Versuche überschritten"}
 
     def compare_jsons(
             self,

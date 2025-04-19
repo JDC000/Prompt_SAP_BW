@@ -16,7 +16,7 @@ function App() {
       alert('Fotos selektieren!');
       return;
     }
-    console.log('Photo type gửi lên:', photoType);
+    console.log('Vom Benutzer gesendeter Bildtyp:', photoType);
     const res = await compareImages(image1, image2, photoType);
     setResult(res);
   };
@@ -27,7 +27,7 @@ function App() {
           label="Abgabe"
           onChange={(file) => setImage1(file)}/>
       <ImageUploader
-          label="Abgabe"
+          label="Lösung"
           onChange={(file) => setImage2(file)}
 />
       <PhotoTypeSelector onSelect={setPhotoType} />

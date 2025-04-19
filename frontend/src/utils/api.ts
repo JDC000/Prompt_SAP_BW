@@ -18,6 +18,6 @@ export async function compareImages(
     });
     return response.data;
   } catch (error) {
-    return { error: 'Lỗi khi so sánh ảnh!' };
+    return { error: 'Fehler beim Vergleichen der Bilder!' };
   }
 }

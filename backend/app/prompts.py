@@ -13,5 +13,6 @@ PROMPTS = {
 }
 
 def get_prompt(photo_type: str) -> str:
-    print("Loại ảnh người dùng chọn:", photo_type)
-    return PROMPTS.get(photo_type, "Mô tả ảnh và trả về JSON.")
+  print("Vom Benutzer ausgewählter Bildtyp:", photo_type)
+  return PROMPTS.get(photo_type, "Bildbeschreibung und Rückgabe von JSON.")
+

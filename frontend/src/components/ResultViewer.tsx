@@ -27,19 +27,19 @@ function ResultViewer({ result }: Props) {
         <h3>Ergebnis:</h3>
         <div style={{ display: 'flex', width: '100%', gap: '1rem' }}>
           <div style={{ flex: 1, background: '#f0f8ff', padding: '1rem', border: '1px solid #add8e6' }}>
-            <h4>JSON 1:</h4>
+            <h4>Abgabe:</h4>
             <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
               {JSON.stringify(result.image_1_json, null, 2)}
             </pre>
           </div>
           <div style={{ flex: 1, background: '#f0f8ff', padding: '1rem', border: '1px solid #add8e6' }}>
-            <h4>JSON 2:</h4>
+            <h4>Lösung:</h4>
             <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
               {JSON.stringify(result.image_2_json, null, 2)}
             </pre>
           </div>
           <div style={{ flex: 1, background: '#f0f8ff', padding: '1rem', border: '1px solid #add8e6' }}>
-            <h4>So sánh:</h4>
+            <h4>Unterschiede:</h4>
             <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
               {JSON.stringify(result.differences, null, 2)}
             </pre>

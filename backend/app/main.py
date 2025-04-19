@@ -43,4 +43,4 @@ async def compare_images(
         }
 
     except Exception as e:
-        return {"error": f"Lỗi khi so sánh ảnh: {str(e)}"}
+        return {"error": f"Fehler beim Vergleichen von Bildern: {str(e)}"}
