@@ -9,7 +9,7 @@ function PhotoTypeSelector({ onSelect }: Props) {
       <select onChange={(e) => onSelect(e.target.value)}>
         <option value="">-- auswählen --</option>
         <option value="ABAP Dictionary">ABAP Dictionary</option>
-        <option value="Data Source">Data Source</option>
+        <option value="BW4Cockpit (Stammdaten)">BW4Cockpit (Stammdaten)</option>
         <option value="Datenvorschau">Datenvorschau</option>
         <option value="DTP">DTP</option>
         <option value="Bewegungsdaten">Bewegungsdaten</option>
