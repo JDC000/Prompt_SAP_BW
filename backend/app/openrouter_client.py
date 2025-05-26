@@ -33,7 +33,7 @@ class OpenRouterClient:
             "X-Title": os.getenv("APP_TITLE", "SAP BW Image Comparator"),
             "Content-Type": "application/json"
         }
-        self.model = "openai/gpt-4.1"
+        self.model = "google/gemini-2.5-flash-preview-05-20"
         self.max_tokens = 2048  # Increased for complex responses
         self.max_retries = 3
         self.timeout = 30  # seconds
