@@ -20,7 +20,7 @@ function PhotoTypeSelector({ onSelect }: Props) {
         <option value="Data Mart">Data Mart</option>
         <option value="Excel">Excel</option>
         <option value="Query">Query</option>
-        <option value="Transformationen">Transformationen</option>
+        <option value="Transformation">Transformation</option>
       </select>
     </div>
   );
