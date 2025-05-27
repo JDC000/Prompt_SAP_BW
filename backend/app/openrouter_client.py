@@ -33,7 +33,7 @@ class OpenRouterClient:
             "X-Title": os.getenv("APP_TITLE", "SAP BW Image Comparator"),
             "Content-Type": "application/json"
         }
-        self.model = "google/gemini-2.5-flash-preview-05-20"
+        self.model = "qwen/qwen2.5-vl-72b-instruct"
         self.max_tokens = 2048  # Increased for complex responses
         self.max_retries = 3
         self.timeout = 30  # seconds
@@ -130,8 +130,10 @@ class OpenRouterClient:
                         }
                     ],
                     max_tokens=self.max_tokens,
+                    temperature=0.01,
                     response_format={"type": "json_object"},  # Force JSON output
                     timeout=self.timeout
+                    
                 )
 
                 if response and response.choices and len(response.choices) > 0 and response.choices[0].message and response.choices[0].message.content:
