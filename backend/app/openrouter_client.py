@@ -3,11 +3,18 @@ import json
 import base64
 import logging
 import re
+from io import BytesIO
 from typing import Dict, List, Union, Optional
 import binascii
+import image
+import numpy as np
 from openai import OpenAI
 from dotenv import load_dotenv
+from openai.types import Image
+
 from .prompts import get_prompt
+import cv2
+
 
 # Load environment variables
 load_dotenv()
@@ -38,38 +45,63 @@ class OpenRouterClient:
         self.max_retries = 3
         self.timeout = 30  # seconds
 
-    def _prepare_image_data(self, base64_img: str) -> Optional[str]:
+    import cv2
+    import numpy as np
+    from PIL import Image
+    from io import BytesIO
+    import base64
+    import re
+    import binascii
 
+    def _prepare_image_data(self, base64_img: str) -> Optional[str]:
         if not base64_img or not isinstance(base64_img, str):
             return None
 
-        # Check if already has valid data URI prefix
-        if base64_img.startswith(("data:image/jpeg;base64,",
-                                  "data:image/png;base64,",
-                                  "data:image/gif;base64,")):
+        # Check if already valid data URI
+        if base64_img.startswith(("data:image/jpeg;base64,", "data:image/png;base64,", "data:image/gif;base64,")):
             return base64_img
 
-        # Remove existing prefix if invalid
+        # Remove partial prefix if present
         if base64_img.startswith("data:image"):
             base64_img = base64_img.split(",", 1)[-1]
 
-        # Validate base64 format
         try:
-            # Check length is multiple of 4
+            # Base64 structure check
             if len(base64_img) % 4 != 0:
                 raise ValueError("Invalid base64 length")
-
-            # Check character set
             if not re.fullmatch(r'^[A-Za-z0-9+/]+={0,2}$', base64_img):
                 raise ValueError("Invalid base64 characters")
 
-            # Verify decodable
+            # Decode base64 image
             decoded = base64.b64decode(base64_img, validate=True)
+            np_arr = np.frombuffer(decoded, np.uint8) # Convert binary data to numpy array of unsigned 8-bit integers. This creates a 1D array representing the raw image bytes
+            image = cv2.imdecode(np_arr, cv2.IMREAD_COLOR) # Decode the image array into OpenCV format (BGR color space by default). cv2.IMREAD_COLOR flag ensures 3-channel color image is loaded
 
-            # Try to determine image type (simplified check)
-            image_type = "jpeg" if base64_img[0] == "/" else "png"
 
-            return f"data:image/{image_type};base64,{base64_img}"
+            # Preparing
+            # Convert to grayscale, this reduces complexity for subsequent processing steps
+            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+            # Apply Non-Local Means Denoising algorithm, h=10 controls the filter strength (higher = more smoothing). This preserves edges better than simple blurring
+            denoised = cv2.fastNlMeansDenoising(gray, h=10)
+            # Standardization. Ensures consistent processing size for all images
+            resized = cv2.resize(denoised, (1024, 1024))
+            # Contrast enhancement. Improves contrast by spreading out intensity values
+            equalized = cv2.equalizeHist(resized)
+
+            # Convert to PNG + base64
+            # Convert numpy array to PIL Image object
+            # Required because PIL has better format support for saving
+            pil_img = Image.fromarray(equalized)
+            # Create in-memory binary stream buffer
+            # More efficient than temporary files
+            buffered = BytesIO()
+            # Save image in PNG format to memory buffer
+            pil_img.save(buffered, format="PNG")
+            # Get buffer contents and encode as base64 string
+            # decode() converts bytes to UTF-8 string
+            processed_base64 = base64.b64encode(buffered.getvalue()).decode()
+
+            return f"data:image/png;base64,{processed_base64}"
 
         except (ValueError, binascii.Error) as e:
             logger.error(f"Image validation failed: {str(e)}")
@@ -133,7 +165,7 @@ class OpenRouterClient:
                     temperature=0.01,
                     response_format={"type": "json_object"},  # Force JSON output
                     timeout=self.timeout
-                    
+
                 )
 
                 if response and response.choices and len(response.choices) > 0 and response.choices[0].message and response.choices[0].message.content:
