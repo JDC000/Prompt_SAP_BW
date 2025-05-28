@@ -45,99 +45,145 @@ class OpenRouterClient:
         self.max_retries = 3
         self.timeout = 30  # seconds
 
-    import cv2
-    import numpy as np
-    from PIL import Image
-    from io import BytesIO
-    import base64
-    import re
-    import binascii
+    def sharpen_image(image):
+        """
+        Wendet einen Schärfefilter auf das Eingabebild an, um Kanten hervorzuheben.
+        Besonders nützlich bei verschwommenen Screenshots oder UI-Aufnahmen,
+        bei denen Text oder Linien besser erkennbar gemacht werden sollen.
+
+        """
+        # Definiert einen Kernel, der den Mittelpunkt betont und die Nachbarn subtrahiert.
+        kernel = np.array([[0, -1, 0],
+                           [-1, 5, -1],
+                           [0, -1, 0]])
+
+        # Wendet den Schärfekernel per Faltung auf das Bild an (2D-Filter)
+        return cv2.filter2D(image, -1, kernel)
+
+    def apply_clahe(gray):
+        """
+        Wendet CLAHE (Contrast Limited Adaptive Histogram Equalization) auf ein Graustufenbild an.
+        CLAHE verbessert den lokalen Kontrast, insbesondere in schwach beleuchteten oder kontrastarmen Bereichen,
+        sodass Text und Details besser sichtbar werden.
+        """
+        # Erstellt ein CLAHE-Objekt mit sinnvollen Standardwerten:
+        # - clipLimit: Begrenzung der Kontrastverstärkung zur Rauschvermeidung
+        # - tileGridSize: Unterteilung des Bildes in 8x8-Kacheln für lokale Histogramm-Ausgleichung
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+
+        # Wendet CLAHE an und gibt das verbesserte Bild zurück
+        return clahe.apply(gray)
 
     def _prepare_image_data(self, base64_img: str) -> Optional[str]:
         if not base64_img or not isinstance(base64_img, str):
-            return None
+            return None  # Ungültiger oder kein String
 
-        # Check if already valid data URI
+        # Überprüfen, ob die Eingabe bereits ein gültiges data-URI ist (Base64-kodiertes Bild)
         if base64_img.startswith(("data:image/jpeg;base64,", "data:image/png;base64,", "data:image/gif;base64,")):
             return base64_img
 
-        # Remove partial prefix if present
+        # Entfernt unvollständige oder fehlerhafte Prefixes
         if base64_img.startswith("data:image"):
             base64_img = base64_img.split(",", 1)[-1]
 
         try:
-            # Base64 structure check
+            # Validiert die Base64-Länge (muss durch 4 teilbar sein)
             if len(base64_img) % 4 != 0:
-                raise ValueError("Invalid base64 length")
+                raise ValueError("Ungültige Base64-Länge")
+
+            # Überprüft erlaubte Base64-Zeichen (inkl. '=' Padding)
             if not re.fullmatch(r'^[A-Za-z0-9+/]+={0,2}$', base64_img):
-                raise ValueError("Invalid base64 characters")
+                raise ValueError("Ungültige Base64-Zeichen")
 
-            # Decode base64 image
+            # Base64-Dekodierung und Umwandlung in Bilddaten
             decoded = base64.b64decode(base64_img, validate=True)
-            np_arr = np.frombuffer(decoded, np.uint8) # Convert binary data to numpy array of unsigned 8-bit integers. This creates a 1D array representing the raw image bytes
-            image = cv2.imdecode(np_arr, cv2.IMREAD_COLOR) # Decode the image array into OpenCV format (BGR color space by default). cv2.IMREAD_COLOR flag ensures 3-channel color image is loaded
+            np_arr = np.frombuffer(decoded, np.uint8)
+            image = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
 
+            # Erweiterte Bildvorverarbeitung für verschwommene Screenshots
+            # Schritt 1: Bild schärfen zur Verbesserung der Textkanten
+            sharpened = self.sharpen_image(image)
 
-            # Preparing
-            # Convert to grayscale, this reduces complexity for subsequent processing steps
-            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-            # Apply Non-Local Means Denoising algorithm, h=10 controls the filter strength (higher = more smoothing). This preserves edges better than simple blurring
-            denoised = cv2.fastNlMeansDenoising(gray, h=10)
-            # Standardization. Ensures consistent processing size for all images
-            resized = cv2.resize(denoised, (1024, 1024))
-            # Contrast enhancement. Improves contrast by spreading out intensity values
-            equalized = cv2.equalizeHist(resized)
+            # Schritt 2: In Graustufenbild umwandeln
+            gray = cv2.cvtColor(sharpened, cv2.COLOR_BGR2GRAY)
 
-            # Convert to PNG + base64
-            # Convert numpy array to PIL Image object
-            # Required because PIL has better format support for saving
-            pil_img = Image.fromarray(equalized)
-            # Create in-memory binary stream buffer
-            # More efficient than temporary files
-            buffered = BytesIO()
-            # Save image in PNG format to memory buffer
+            # Schritt 3: CLAHE anwenden, um lokalen Kontrast zu verbessern
+            clahe_img = self.apply_clahe(gray)
+
+            # Schritt 4: Bild auf 1024x1024 skalieren zur Standardisierung
+            resized = cv2.resize(clahe_img, (1024, 1024))
+
+            # Schritt 5: Rauschunterdrückung anwenden, Text bleibt erhalten
+            denoised = cv2.fastNlMeansDenoising(resized, h=10)
+
+            # --- Umwandlung des Bildes in Base64 (PNG) ---
+
+            pil_img = Image.fromarray(denoised)  # NumPy → PIL
+            buffered = BytesIO()  # Speicherpuffer
             pil_img.save(buffered, format="PNG")
-            # Get buffer contents and encode as base64 string
-            # decode() converts bytes to UTF-8 string
             processed_base64 = base64.b64encode(buffered.getvalue()).decode()
 
             return f"data:image/png;base64,{processed_base64}"
 
         except (ValueError, binascii.Error) as e:
-            logger.error(f"Image validation failed: {str(e)}")
-            return None
+            logger.error(f"Bildvalidierung fehlgeschlagen: {str(e)}")
+            return None  # Bei Validierungsfehlern
+
         except Exception as e:
-            logger.exception("Unexpected error during image validation")
-            return None
+            logger.exception("Unerwarteter Fehler bei der Bildvalidierung")
+            return None  # Allgemeiner Fehler
 
     def _extract_json(self, raw_text: str) -> Optional[Union[Dict, List]]:
-
+        """
+        Extrahiert JSON aus einem gegebenen Text.
+        Wenn der Text kein direktes valides JSON enthält, versucht die Methode, JSON-ähnliche Strukturen zu erkennen und zu parsen.
+        """
+        # Überprüfung: Eingabe muss ein String sein und darf nicht leer sein
         if not raw_text or not isinstance(raw_text, str):
             return None
 
         try:
-            # First try to parse directly
+            # 1. Versuch: Versuche, den gesamten Text direkt als JSON zu parsen
             return json.loads(raw_text)
+
         except json.JSONDecodeError:
-            # Fallback: find JSON-like substrings
+            # Falls das Parsen fehlschlägt, z. B. bei zusätzlichem Text vor/nach dem JSON:
             try:
-                # Improved regex pattern to match both {} and [] JSON structures
+                # Verwende einen regulären Ausdruck, um entweder ein JSON-Objekt ({...}) oder eine JSON-Liste ([...]) zu finden
                 json_match = re.search(r'\{[\s\S]*\}|\[[\s\S]*\]', raw_text)
+
                 if json_match:
+                    # Extrahiere den gefundenen JSON-ähnlichen String
                     extracted = json_match.group()
-                    # Clean common truncations
+
+                    # Behebt das häufige Problem, dass ein JSON-Ausdruck nicht vollständig zurückgegeben wurde
+                    # Beispiel: {"a": 1, "b": 2,   → wird abgeschnitten und muss bereinigt werden
                     if not extracted.endswith('}') and not extracted.endswith(']'):
                         extracted = extracted.rsplit(',', 1)[0] + ('}' if '{' in extracted else ']')
+
+                    # Versuche, das bereinigte Fragment als JSON zu laden
                     return json.loads(extracted)
+
             except json.JSONDecodeError as je:
-                logger.warning(f"JSON extraction failed: {str(je)}",
-                               extra={"input_sample": raw_text[:100] + "..."})
+                # Wenn selbst das Parsen des extrahierten Fragments fehlschlägt, protokolliere eine Warnung
+                logger.warning(
+                    f"JSON-Extraktion fehlgeschlagen: {str(je)}",
+                    extra={"input_sample": raw_text[:100] + "..."}  # Loggt die ersten 100 Zeichen zur Analyse
+                )
+
             except Exception as e:
-                logger.error(f"Unexpected error during JSON extraction: {str(e)}")
+                # Unerwartete Fehler (z. B. bei Encoding-Problemen) werden hier protokolliert
+                logger.error(f"Unerwarteter Fehler bei der JSON-Extraktion: {str(e)}")
+
+        # Rückgabe None, wenn alle Versuche fehlschlagen
         return None
 
     def generate_json_from_image(self, base64_img: str, photo_type: str) -> Dict:
-        """Generate JSON from image with enhanced error handling"""
+        """
+        Sendet ein Bild an die API, um daraus strukturiertes JSON zu generieren.
+        Enthält Fehlerbehandlung und Wiederholungslogik
+        """
+        # Vorbereitung und Validierung des Bildes
         prepared_image = self._prepare_image_data(base64_img)
         if not prepared_image:
             return {
@@ -145,10 +191,13 @@ class OpenRouterClient:
                 "details": "Base64-Bildvalidierung fehlgeschlagen"
             }
 
+        # Prompt generieren, z. B. „Extrahiere alle Tabelleneinträge als JSON...“
         prompt = f"{get_prompt(photo_type)}\nGeben Sie nur JSON gemäß der festgelegten Struktur zurück, ohne zusätzlichen Text."
 
+        # Mehrfachversuch bei API-Fehlern (z. B. Netzprobleme, Timeouts)
         for attempt in range(self.max_retries):
             try:
+                # API-Aufruf mit Bild + Prompt im Multi-Modal-Modus
                 response = self.client.chat.completions.create(
                     model=self.model,
                     extra_headers=self.headers,
@@ -162,26 +211,30 @@ class OpenRouterClient:
                         }
                     ],
                     max_tokens=self.max_tokens,
-                    temperature=0.01,
-                    response_format={"type": "json_object"},  # Force JSON output
+                    temperature=0.01,  # Niedrig, um deterministische Ausgabe zu fördern
+                    response_format={"type": "json_object"},  # Erzwingt JSON-Format
                     timeout=self.timeout
-
                 )
 
-                if response and response.choices and len(response.choices) > 0 and response.choices[0].message and response.choices[0].message.content:
+                # Validierung der Antwort: ist überhaupt ein Ergebnis vorhanden?
+                if response and response.choices and len(response.choices) > 0 and response.choices[0].message and \
+                        response.choices[0].message.content:
                     raw_output = response.choices[0].message.content.strip()
-                    logger.debug(f"Roh-API-Antwort: {raw_output[:200]}...")  # Log first part
+                    logger.debug(f"Roh-API-Antwort: {raw_output[:200]}...")  # Nur die ersten Zeichen loggen
 
+                    # Versuch, die Antwort in ein echtes JSON zu parsen
                     parsed = self._extract_json(raw_output)
                     if parsed:
-                        return parsed
+                        return parsed  # Erfolgreich extrahiertes JSON zurückgeben
 
+                    # Falls keine gültige JSON-Struktur extrahiert werden konnte
                     return {
                         "error": "Ungültige JSON-Antwort",
                         "raw_output": raw_output,
                         "suggestion": "Das Modell hat ein fehlerhaftes JSON zurückgegeben. Bitte versuchen Sie es erneut."
                     }
                 else:
+                    # Kein Inhalt in der Antwort
                     logger.error(f"Leere oder fehlerhafte Antwort von OpenRouter (Versuch {attempt + 1}): {response}")
                     if attempt == self.max_retries - 1:
                         return {
@@ -190,6 +243,7 @@ class OpenRouterClient:
                         }
 
             except json.JSONDecodeError as je:
+                # Fehler beim Parsen des JSON-Antworttexts
                 logger.error(f"JSON-Decodierungsfehler (Versuch {attempt + 1}): {str(je)}")
                 if attempt == self.max_retries - 1:
                     return {
@@ -199,15 +253,15 @@ class OpenRouterClient:
                     }
 
             except Exception as e:
-
+                # Allgemeiner API-Fehler, z. B. Timeout, Netzwerkproblem etc.
                 logger.error(f"API-Aufruf fehlgeschlagen (Versuch {attempt + 1}): {str(e)}")
-
                 if attempt == self.max_retries - 1:
                     return {
-
                         "error": "API-Anfrage fehlgeschlagen",
                         "exception": str(e)
                     }
+
+        # Alle Wiederholungsversuche sind fehlgeschlagen
         return {"error": "Maximale Versuche überschritten"}
 
     def compare_jsons(
@@ -220,15 +274,23 @@ class OpenRouterClient:
         if ignore_fields is None:
             ignore_fields = []
 
-        diffs = []
+        diffs = []  # Liste zum Sammeln aller Unterschiede
 
         def compare_items(ref, cand, path=""):
+            """
+            Rekursive Hilfsfunktion, die einzelne Elemente in Dictionaries oder Listen vergleicht.
+            Bei Unterschieden werden diese mit Pfadangabe und Typ gespeichert.
+            """
             if isinstance(ref, dict) and isinstance(cand, dict):
+                # Vergleiche alle Schlüssel aus beiden Dictionaries
                 for key in set(ref.keys()).union(cand.keys()):
                     if key in ignore_fields:
-                        continue
+                        continue  # Schlüssel überspringen, wenn in der Ignore-Liste
+
                     new_path = f"{path}.{key}" if path else key
+
                     if key not in ref:
+                        # Schlüssel nur im Kandidaten vorhanden
                         diffs.append({
                             "path": new_path,
                             "reference": None,
@@ -236,6 +298,7 @@ class OpenRouterClient:
                             "type": "missing_in_reference"
                         })
                     elif key not in cand:
+                        # Schlüssel fehlt im Kandidaten
                         diffs.append({
                             "path": new_path,
                             "reference": ref[key],
@@ -243,11 +306,16 @@ class OpenRouterClient:
                             "type": "missing_in_candidate"
                         })
                     else:
+                        # Beide Schlüssel vorhanden → rekursiv weiter vergleichen
                         compare_items(ref[key], cand[key], new_path)
+
             elif isinstance(ref, list) and isinstance(cand, list):
+                # Beide Werte sind Listen → Elementweise vergleichen
                 for i, (r, c) in enumerate(zip(ref, cand)):
                     compare_items(r, c, f"{path}[{i}]")
+
             elif ref != cand:
+                # Wert unterschiedlich (keine weiteren Strukturen)
                 diffs.append({
                     "path": path,
                     "reference": ref,
@@ -255,9 +323,13 @@ class OpenRouterClient:
                     "type": "value_mismatch"
                 })
 
+        # Start des Vergleichs mit der obersten Ebene
         compare_items(reference, candidate)
+
+        # Rückgabe aller gefundenen Abweichungen
         return diffs
 
 
-# Singleton instance
+# Singleton-Instanz: Diese einzige Instanz der Klasse wird im gesamten Projekt wiederverwendet,
+# um API-Aufrufe zentral zu verwalten und mehrfaches Initialisieren zu vermeiden.
 client = OpenRouterClient()
