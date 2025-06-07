@@ -24,7 +24,7 @@ function App() {
 
   return (
     <div style={{ maxWidth: 800, margin: '0 auto', padding: 20 }}>
-      <h1>SAP BW Image Comparator</h1>
+      <h1 style={{ fontSize: '30px' }}>SAP BW Image Comparator</h1>
       <ImageUploader
         label="Abgabe"
         onChange={(file) => setImage1(file)}

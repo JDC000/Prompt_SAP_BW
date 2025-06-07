@@ -268,54 +268,128 @@ class OpenRouterClient:
             self,
             reference: Union[Dict, List],
             candidate: Union[Dict, List],
-            ignore_fields: List[str] = None
+            ignore_fields: List[str] = None,
+            word_match_fields: List[str] = None
     ) -> List[Dict]:
-        """Enhanced JSON comparison with nested structure support"""
+        """
+        Erweiterter JSON-Vergleich mit Unterstützung für:
+        - Verschachtelte Strukturen
+        - Wort-basierter Vergleich für spezifische Felder
+        - Ignorieren von definierten Feldern
+        Gibt eine Liste von Unterschieden mit Pfadangabe zurück.
+        """
+        # Initialisiere Ignorier-Listen falls nicht angegeben
         if ignore_fields is None:
             ignore_fields = []
+        if word_match_fields is None:
+            word_match_fields = []
 
-        diffs = []  # Liste zum Sammeln aller Unterschiede
+        diffs = []  # Liste zur Sammlung aller Unterschiede
+
+        def compare_words(ref_str: str, cand_str: str) -> bool:
+            """
+            Hilfsfunktion für wortweisen String-Vergleich
+            Vergleicht ob alle Wörter des Referenz-Strings im Kandidaten-String enthalten sind
+            (case-insensitive)
+            """
+            if not isinstance(ref_str, str) or not isinstance(cand_str, str):
+                return False
+
+            # Normalisiere Strings: Kleinbuchstaben, entferne überflüssige Leerzeichen
+            ref_words = set(ref_str.lower().split())
+            cand_words = set(cand_str.lower().split())
+
+            # Prüfe ob alle Referenzwörter im Kandidaten vorhanden sind
+            return ref_words.issubset(cand_words)
 
         def compare_items(ref, cand, path=""):
             """
-            Rekursive Hilfsfunktion, die einzelne Elemente in Dictionaries oder Listen vergleicht.
-            Bei Unterschieden werden diese mit Pfadangabe und Typ gespeichert.
+            Rekursive Vergleichsfunktion für Dictionary- und Listenelemente.
+            Args:
+                ref: Referenzwert (aus dem Original-JSON)
+                cand: Kandidatenwert (aus dem zu prüfenden JSON)
+                path: Aktueller Pfad für Fehlermeldungen (wird rekursiv aufgebaut)
             """
+            # Fall 1: Beide Werte sind Dictionaries
             if isinstance(ref, dict) and isinstance(cand, dict):
-                # Vergleiche alle Schlüssel aus beiden Dictionaries
-                for key in set(ref.keys()).union(cand.keys()):
+                # 1. Schritt: Gemeinsame Keys vergleichen
+                gemeinsame_keys = set(ref.keys()).intersection(cand.keys())
+                for key in gemeinsame_keys:
                     if key in ignore_fields:
-                        continue  # Schlüssel überspringen, wenn in der Ignore-Liste
+                        continue  # Ignoriere Felder aus der Ignore-Liste
 
                     new_path = f"{path}.{key}" if path else key
 
-                    if key not in ref:
-                        # Schlüssel nur im Kandidaten vorhanden
-                        diffs.append({
-                            "path": new_path,
-                            "reference": None,
-                            "candidate": cand[key],
-                            "type": "missing_in_reference"
-                        })
-                    elif key not in cand:
-                        # Schlüssel fehlt im Kandidaten
-                        diffs.append({
-                            "path": new_path,
-                            "reference": ref[key],
-                            "candidate": None,
-                            "type": "missing_in_candidate"
-                        })
+                    # Wort-basierten Vergleich für spezielle Felder
+                    if key in word_match_fields:
+                        if isinstance(ref[key], str) and isinstance(cand[key], str):
+                            if not compare_words(ref[key], cand[key]):
+                                diffs.append({
+                                    "path": new_path,
+                                    "reference": ref[key],
+                                    "candidate": cand[key],
+                                    "type": "word_mismatch"
+                                })
+                        else:
+                            # Fallback für nicht-String Felder
+                            compare_items(ref[key], cand[key], new_path)
                     else:
-                        # Beide Schlüssel vorhanden → rekursiv weiter vergleichen
+                        # Normaler Vergleich für andere Felder
                         compare_items(ref[key], cand[key], new_path)
 
+                # 2. Schritt: Fehlende Keys in einem der Dictionaries prüfen
+                ref_only_keys = set(ref.keys()) - set(cand.keys())
+                for key in ref_only_keys:
+                    if key in ignore_fields:
+                        continue
+                    new_path = f"{path}.{key}" if path else key
+                    diffs.append({
+                        "path": new_path,
+                        "reference": ref[key],
+                        "candidate": None,
+                        "type": "value is missing in candidate"
+                    })
+
+                cand_only_keys = set(cand.keys()) - set(ref.keys())
+                for key in cand_only_keys:
+                    if key in ignore_fields:
+                        continue
+                    new_path = f"{path}.{key}" if path else key
+                    diffs.append({
+                        "path": new_path,
+                        "reference": None,
+                        "candidate": cand[key],
+                        "type": "value is missing in reference"
+                    })
+
+            # Fall 2: Beide Werte sind Listen
             elif isinstance(ref, list) and isinstance(cand, list):
-                # Beide Werte sind Listen → Elementweise vergleichen
+                # Elementweise Vergleich für gemeinsame Indizes
                 for i, (r, c) in enumerate(zip(ref, cand)):
                     compare_items(r, c, f"{path}[{i}]")
 
+                # Behandlung unterschiedlicher Listenlängen
+                if len(ref) != len(cand):
+                    min_len = min(len(ref), len(cand))
+                    max_len = max(len(ref), len(cand))
+                    for i in range(min_len, max_len):
+                        if i < len(ref):
+                            diffs.append({
+                                "path": f"{path}[{i}]",
+                                "reference": ref[i],
+                                "candidate": None,
+                                "type": "value is missing in candidate"
+                            })
+                        else:
+                            diffs.append({
+                                "path": f"{path}[{i}]",
+                                "reference": None,
+                                "candidate": cand[i],
+                                "type": "value is missing in reference"
+                            })
+
+            # Fall 3: Einfache Werte (keine weiteren Unterstrukturen)
             elif ref != cand:
-                # Wert unterschiedlich (keine weiteren Strukturen)
                 diffs.append({
                     "path": path,
                     "reference": ref,
@@ -323,13 +397,11 @@ class OpenRouterClient:
                     "type": "value_mismatch"
                 })
 
-        # Start des Vergleichs mit der obersten Ebene
+        # Starte den Vergleich auf oberster Ebene
         compare_items(reference, candidate)
 
-        # Rückgabe aller gefundenen Abweichungen
+        # Rückgabe aller gefundenen Unterschiede
         return diffs
-
-
 # Singleton-Instanz: Diese einzige Instanz der Klasse wird im gesamten Projekt wiederverwendet,
 # um API-Aufrufe zentral zu verwalten und mehrfaches Initialisieren zu vermeiden.
 client = OpenRouterClient()
