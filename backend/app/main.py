@@ -1,6 +1,8 @@
 from fastapi import FastAPI, File, Form, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 import base64
+
+from backend.app.models import CompareResponse
 from backend.app.openrouter_client import client
 from dotenv import load_dotenv
 load_dotenv()
@@ -35,7 +37,6 @@ async def compare_images(
         json1 = client.generate_json_from_image(img1_b64, photo_type)
         json2 = client.generate_json_from_image(img2_b64, photo_type)
         diffs = client.compare_jsons(json1, json2)
-
         return {
             "image_1_json": json1,
             "image_2_json": json2,
