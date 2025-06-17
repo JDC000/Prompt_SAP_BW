@@ -1,17 +1,352 @@
 PROMPTS = {
-  "ABAP Dictionary": "Extract only the core technical structure of a SAP Dictionary Display Table screen from the image. Return the result as JSON in the following format: { \"Fields\": [ { \"FieldName\": \"name\",  \"DataType\": \"CHAR/DATS/...\", \"Length\": number, \"DecimalPlaces\": number }, ... ] } Only include technical metadata fields: FieldName, DataType, Length, DecimalPlaces. - Convert all field's name to lowercase.- Replace entire name if it contains:\\n     - 'to' → date to (ex. dateto or date to -> date to)\\n     - 'from' → Date from (ex. datefrom or date from -> date from), 'txt' -> 'length of text'(ex. txtlg -> length of text), 'lang' -> 'langu'\\n  Do not include any fields that contain personal identifiers (Frields contain /BIC/) or user-specific codes. If the field 'Key' is selected, then Key is True else False. Do not include elements such as descriptions or labels (e.g., Short Description, Kurzbeschreibung). in the Output must be anonymized and language-independent, reusable across SAP systems.",
- "BW4Cockpit (Stammdaten)": "From the provided SAP table screenshot, extract only structural metadata in JSON format:\n\n{\n  \"CleanedColumns\": [\"Cleaned\", \"column\", \"names\"],\n  \"HasLongTextColumn\": true/false,\n  \"LongTextConsistentStructure\": true/false or null,\n  \"InvalidLongTextValues\": [\"List of incorrect entries\"]\n}\n\nInstructions:\n- Extract and clean column names by removing any student- or object-specific suffixes (e.g., 'Semesterende TE8 018' → 'Semester'). - Replace entire name if it contains:\\n     - 'to' → Date to\\n     - 'from' → Date from\\n     - 'long' → Long text\\n     - 'shot' → Short text\\n - 'medium' → Medium text\\n - If it just contains 'date' -> 'Date' \\n \n- Return cleaned column names in 'CleanedColumns'.\n- Check whether a column named 'Long Text' exists:\n   - If yes, set 'HasLongTextColumn': true\n   - If no, set 'HasLongTextColumn': false, 'LongTextConsistentStructure': null, 'InvalidLongTextValues': []\n\n If 'HasLongTextColumn': true and  if there is a row, which contains 'BAU' for Example 'BAU - Bauwesen (Gi)' then set 'LongTextConsistentStructure': true.\n- Otherwise, set it to false and write 'Bauwesen(GI)' in 'InvalidLongTextValues'.\n\nReturn ONLY the metadata JSON. Do NOT extract or return full table data.",
-  "Data Source": "From the provided screenshot of a DataSource definition screen in SAP BW (Eclipse), extract the following metadata and return it as a valid JSON object with this structure:\n{\n  \"IgnoredHeaderRows\": <number from the field 'Zu ignorierende Kopfzeilen'>,\n  \"FieldSeparatorSet\": true | false,  // true if the field 'Datenseparator' contains a visible character (e.g. ; or :), false if empty\n  \"EscapeCharacterSet\": true | false, // true if the field 'Escape-Zeichen' contains a visible character (e.g. \"), false if empty\n  \"ZahlenformatFestlegen\": true | false // true if the checkbox 'Zahlenformat festlegen' is selected (✓), otherwise false\n}\n\nInstructions:\n- Do not extract file paths, technical names, usernames, or any information unrelated to the four fields listed above.\n- If the 'Zu ignorierende Kopfzeilen' field is empty, return null.\n- The result must be a valid JSON object with no extra explanation or comments.",
-  "Datenvorschau": "From the provided SAP BW4/HANA screenshot, analyze the data preview section. If the table is labeled 'Datenvorschau für DataSource' (or equivalent in English), extract and return only the column headers of the table as a JSON list under the key 'Columns'. If the table belongs to 'BW Reporting Vorschau' (or 'BW Reporting Preview'), extract and return the column headers together with the last row (totals) as a JSON object in the format: { 'Header1': 'Value1', 'Header2': 'Value2', ... }. Ignore all other interface content and return only the required structured data.",
-  "Bewegungsdaten": "From the provided image of a structured text data file, extract the following metadata in JSON format:\n\n{\n  \"ColumnDelimiter\": \"Detected character used to separate columns (e.g., ';' or '#')\",\n  \"FirstRow\": [\"First\", \"row\", \"values\", \"...\"],\n  \"ColumnCount\": number,\n  \"Columns\": [\"Header1\", \"Header2\", \"...\"] or null if not available\n}\n\nInstructions:\n- Identify the delimiter character used to separate columns.\n- Extract the first complete data row, split it using the delimiter, and output as an array under \"FirstRow\".\n- Set \"ColumnCount\" equal to the length of this array.\n- If a header row exists, extract column names; otherwise, set \"Columns\": null.\n- Only output the above metadata, no additional data rows are required.",
-  "Composite Provider":"You are given a screenshot of a Composite Provider in SAP BW (Eclipse). The screenshot may contain both English and German labels.\\nYour task is to extract all valid field mappings between Source and Target fields based only on visible connector lines.\\n\\nInstructions:\\n1. If a field label is in English, translate it to the equivalent German term. For example:\\n   - 'Department' → 'Fachbereich'\\n   - 'Students' → 'Studierenden'\\n   - 'State' → 'Bundesland'\\n   - 'External Funding' → 'Drittmittel'\\n   - 'Promotions' → 'Promotionen'\\n   - 'Semester' → 'Semester' (same in both languages)\\n\\n2. Ignore fields that contain any of the following substrings (in either language):\\n   'hochschul', 'zeit', 'ort', 'daten', 'graphie'\\n\\n3. Normalize field names using the following rules:\\n   - Convert to lowercase.\\n   - Replace entire name if it contains:\\n     - 'bereich' → Fachbereich\\n     - 'bachelor' → Bachelorarbeiten\\n     - 'promo' → Promotionen\\n     - 'studier' → Studierenden\\n     - 'dritt' → Drittmittel\\n     - 'landes' → Landesmittel\\n     - 'semes' → Semester\\n     - 'bund' → Bundesland\\n   - If multiple rules match, apply only the first.\\n\\n4. Format output in German, like this:\\n{\\n  \\\"Mappings\\\": [\\n    { \\\"Source\\\": \\\"fachbereich\\\", \\\"Target\\\": \\\"fachbereich\\\" },\\n    ...\\n  ],\\n  \\\"TotalMappings\\\": number\\n}\\n\\n5. Sort \\\"Mappings\\\" alphabetically by Source, then Target.\\n\\nExamples:\\n\\nExample 1:\\n- Connector from 'Department (TE8_016)' → 'Bereich'\\n- Connector from 'Semester (EN)' → 'Semester (DE)'\\n\\nOutput:\\n{\\n  \\\"Mappings\\\": [\\n    { \\\"Source\\\": \\\"fachbereich\\\", \\\"Target\\\": \\\"fachbereich\\\" },\\n    { \\\"Source\\\": \\\"semester\\\", \\\"Target\\\": \\\"semester\\\" }\\n  ],\\n  \\\"TotalMappings\\\": 2\\n}\\n\\nExample 2:\\n- Connector from 'Promotions' → 'Promotionen'\\n- Connector from 'External Funding Total' → 'Drittmittel'\\n- Connector from 'State Code' → 'Bundesland'\\n\\nOutput:\\n{\\n  \\\"Mappings\\\": [\\n    { \\\"Source\\\": \\\"bundesland\\\", \\\"Target\\\": \\\"bundesland\\\" },\\n    { \\\"Source\\\": \\\"drittmittel\\\", \\\"Target\\\": \\\"drittmittel\\\" },\\n    { \\\"Source\\\": \\\"promotionen\\\", \\\"Target\\\": \\\"promotionen\\\" }\\n  ],\\n  \\\"TotalMappings\\\": 3\\n}\\n\\nNow extract all mappings using the same translation, filtering, normalization, and output format rules. Always standardize all field names to German.",
-  "Data Flow Object": "From the provided screenshot of a SAP BW Data Flow Object in Eclipse, determine whether each expected object is correctly connected using a  directional arrow (Verbindung).  lines without arrows are only structural and must be ignored. - If the technical name of object (ex. TE8DHS007) contains the following subtrings :\n  - 'DS' → rename  to 'data_source' (append _1, _2, etc. based on visual order)\n  - 'DF' → rename  to  'data_flow_object'  - 'DHS' or 'DMH' → rename  to  'adso'  \n\nFocus only on the following connection types:\n- From data_source  to data_flow_object \n OR From data_source to an aDSO  OR From  data_source to data_flow_object\n\nIgnore any links involving the object, that names 'PC_FILE'.\n\nA valid connection is represented visually by a  line with an arrow. If there is no line beetween the objects, is means no connection between them.\nIf an expected connection is missing (i.e., the object has no incoming or outgoing arrow where one is expected), it must be marked as `Connected: false`.\n\nNormalize all object names using the following rules:\n- Remove any technical prefix such as TE5, TE8, TES, etc.\n- Convert names to lowercase\n- otherwise: just lowercase and cleaned\n\nReturn each expected or detected connection in the following JSON format:\n\n{\n  \"Source\": \"<normalized_source_name>\",\n  \"Target\": \"<normalized_target_name>\",\n  \"Connected\": true | false\n}\n\nOnly return valid JSON under the key `\"Connections\"`. Do not include any explanation or metadata.",
-  "DTP": "From the provided screenshot of a DTP (Data Transfer Process) monitor screen in SAP BW (Eclipse), analyze the 'Request Processing' section.\n\n Extract and list each 'Data Package' along with the corresponding number of 'Data Records' processed.\n\nReturn the result in the following JSON format:\n{\n  'DataPackages': [\n    {\n      'Name': '<data_package_name>',\n      'RecordCount': <number>\n    },\n    ...\n  ]\n}\n\nOnly include visible data package rows. Do not infer or summarize non-displayed packages. Return a valid JSON object with no explanation or extra metadata.",
-  "Excel":"From the provided screenshot of an Excel file, extract  the values from the row “Overall Result” (or equivalent summary row). Return the output as a valid JSON object where each key is the column name and each value is the corresponding total from the summary row.\n\nInstructions:\n- Ignore the first column if it contains labels like 'Fachbereich', 'Bundesland', etc., and only extract numerical summary data.\n- Ensure that the numbers are treated as strings (to preserve formatting like commas or dots if present).\n- Do not extract intermediate row values, only the header and the bottom “Overall Result” row.\n- Return one JSON object per image.\n\nExpected JSON format example:\n{\n  \"Overallresult_1\": \"4.453.046\",\n  \"AOverallresult_2\": \"664.678\"}",
-  "Transformation":"You are given an image of an SAP BW transformation scenario in Eclipse. The labels in the image may appear in English or German, or both.\\nYour task is to extract all valid field mappings between Source and Target fields, based only on visible connector lines.Caution: Name in Source and Target are sometime different (eg. in Source  'FIELD1' but in Target is 'Semester').\\n\\nInstructions:\\n\\n1. If a field label is in English, translate it to its German equivalent before normalization. Examples:\\n   - 'Department' → 'Fachbereich'\\n   - 'Students' → 'Studierenden'\\n   - 'State' → 'Bundesland'\\n   - 'External Funding' → 'Drittmittel'\\n   - 'Promotions' → 'Promotionen'\\n   - 'Semester' → 'Semester' (same in both languages)\\n\\n2. Normalize all field names (after translation if needed) using the following rules:\\n   - Convert to lowercase.\\n   - If the field name contains Substring:\\n     - 'bereich' → Fachbereich\\n     - 'bache' → Bachelorarbeiten\\n     - 'promo' → Promotionen\\n     - 'studier' → Studierenden\\n     - 'dritt' → Drittmittel\\n     - 'landes' → Landesmittel\\n     - 'seme' and 'end' → Semesterende\\n ,  - 'seme' → Semester\\n     - 'bund' → Bundesland\\n, else extract name from []   - If multiple matches apply, apply only the first.\\n\\n3. Format the output in German, using the following JSON structure:\\n{\\n  \\\"Mappings\\\": [\\n    { \\\"Source\\\": \\\"<normalized_name_deutsch or name in '[]'>\\\", \\\"Target\\\": \\\"<normalized_name_deutsch name in '[]'>\\\" },\\n    ...\\n  ],\\n  \\\"TotalMappings\\\": <number>\\n}\\n\\n4. Sort the \\\"Mappings\\\" list alphabetically by Source field.\\n\\nExamples:\\n\\nExample 1:\\n- Connector from 'Department (EN)' → 'Bereich (DE)'\\n- Connector from 'Semester (EN)' → 'Semester (DE)'\\n\\nOutput:\\n{\\n  \\\"Mappings\\\": [\\n    { \\\"Source\\\": \\\"fachbereich\\\", \\\"Target\\\": \\\"fachbereich\\\" },\\n    { \\\"Source\\\": \\\"semester\\\", \\\"Target\\\": \\\"semester\\\" }\\n  ],\\n  \\\"TotalMappings\\\": 2\\n}\\n\\nExample 2:\\n- Connector from 'Promotions (EN)' → 'Promotionen (DE)'\\n- Connector from 'External Funding Total (EN)' → 'Drittmittel (DE)'\\n- Connector from 'State Code (EN)' → 'Bundesland (DE)'\\n\\nOutput:\\n{\\n  \\\"Mappings\\\": [\\n    { \\\"Source\\\": \\\"bundesland\\\", \\\"Target\\\": \\\"bundesland\\\" },\\n    { \\\"Source\\\": \\\"drittmittel\\\", \\\"Target\\\": \\\"drittmittel\\\" },\\n    { \\\"Source\\\": \\\"promotionen\\\", \\\"Target\\\": \\\"promotionen\\\" }\\n  ],\\n  \\\"TotalMappings\\\": 3\\n}\\n\\nNow extract all mappings from the image using these translation, normalization, and formatting rules. Always return field names in German.",
-  "Query":"From the provided screenshot of a SAP BW Query definition in Eclipse, extract the following information and return it as a JSON object:\n Extract all visible field labels under the sections labeled 'Spalten' (or 'Columns'), 'Zeilen' (or 'Rows'), and 'Freie Merkmale' (or 'Free Characteristics').\n- Only extract the user-facing names (e.g., 'Anteil Promotion', 'Anzahl der Studierenden'),\n- Do not include technical (TE-numbers ) names like TE6 017, TE8 017 e.g. Semester TE8 012 -> Semester, Fachbereich TE8 016 --> Fachbereich. or anything in square brackets.\n\n  In the section titled 'Eigenschaften' (or 'Properties'), extract:\n The content of the 'Beschreibung' (or 'Description') field, only if it does not contain TE-numbers.\n The value of 'Anzahl Dezimalstellen' (or 'Number of Decimal Places') if a section labeled 'Anzeigen' (or 'Display') is visible. If the section is not visible, return 'nicht vorhanden'.\n\\n\ 3. From the query title (e.g., shown as 'Datenblatt-Definition: TE8_012_Q5_HS - ...'), extract the query number in the format 'Q1' to 'Q5'.\n\- If a malformed version is detected like 'Q112', extract only the first valid prefix (e.g., 'Q1').\n\\n\Return your result using the following JSON structure:\n\{\n\'Query': 'Q1' | 'Q2' | 'Q3' | 'Q4' | 'Q5',\n\'Columns': [...],\n\'Rows': [...],\n\'FreeCharacteristics': [...],\n\'Description': <string | null>,\n\'DecimalPlaces': <string | 'nicht vorhanden'>\n\}\n\ Only return valid JSON. Do not add any explanation or extra comments. Only return valid JSON. Do not add any explanation or extra comments.",
-  "Data Mart": "From the provided screenshot of a SAP BW DataStore Object (Advanced), extract all selected (filled) options from the section titled 'Modellierungseigenschaften'. This includes both main radio buttons and any selected checkboxes underneath them. Ignore any unselected or grayed-out options, which contains Substring as 'Hot', 'Warm', 'Cold' and 'Auf'. Do NOT extract any personal identifiers such as 'Technischer Name'.\n\nReturn the selected modeling properties in the following JSON format:\n\n{\n  \"SelectedOption1\": \"<selected_option_1>\",\n  \"SelectedOption2\": \"<selected_option_2>\",\n  ...\n}\n\nRules:\n- Output must be valid JSON.\n- The option names must match exactly what is displayed in the screenshot.\n- Number each selected option in order (SelectedOption1, SelectedOption2, etc.).\n- Do not include any explanation, metadata, or unselected items.",
-  "Data Store Object": "From the provided screenshot of a SAP BW DataStore Object (Advanced), extract all selected (filled) options from the section titled 'Modellierungseigenschaften'. This includes both main radio buttons and any selected checkboxes underneath them. If the field contains 'Staging' then rename to 'Staging-DataStore-Objekt', 'Eingangs', then renames to Nur 'Eingangs-Queue','Mart' then renames to 'Data-Mart-DataStore-Objekt' . Ignore any unselected or grayed-out options.Ignore fields contain 'Hot', 'Cold', 'Warm', 'Objektebene'. 'Auf' and 'Partitionsebene'. Do NOT extract any personal identifiers such as 'Technischer Name'.\n\nReturn the selected modeling properties in the following JSON format:\n\n{\n  \"SelectedOption1\": \"<selected_option_1>\",\n  \"SelectedOption2\": \"<selected_option_2>\",\n  ...\n}\n\nRules:\n- Output must be valid JSON.\n- The option names must match exactly what is displayed in the screenshot.\n- Number each selected option in order (SelectedOption1, SelectedOption2, etc.).\n- Do not include any explanation, metadata, or unselected items. If 'Nur Eingangs-Queue' is selected, that means 'Staging-DataStore-Objekt' also selected."
+  "ABAP Dictionary": (
+        "Analyze SAP Dictionary Display Table screenshot and extract core technical structure.\n\n"
+        
+        "Output Requirements:\n"
+        "{\n"
+        "  \"Fields\": [\n"
+        "    {\n"
+        "      \"FieldName\": \"normalized_name\",\n"
+        "      \"DataType\": \"DATA_TYPE\",\n"
+        "      \"Length\": number\n"
+        "    },\n"
+        "    ...\n"
+        "  ]\n"
+        "}\n\n"
+        
+        "Field Processing Rules:\n"
+        "1. Name Normalization:\n"
+        "   - Convert all to lowercase\n"
+        "   - 'to' → 'date to' (e.g., 'dateto' → 'date to')\n"
+        "   - 'from' → 'date from' (e.g., 'datefrom' → 'date from')\n"
+        "   - 'txt' → 'length of text' (e.g., 'txtlg' → 'length of text')\n"
+        "   - 'lang' → 'langu'\n\n"
+        
+        "2. Field Exclusion:\n"
+        "   - Remove fields containing '/BIC/'\n"
+        "   - Remove personal identifiers\n"
+        "   - Remove descriptive fields (Short Description, Kurzbeschreibung, etc.)\n\n"
+        
+        "3. Technical Requirements:\n"
+        "   - Include only: FieldName, DataType, Length\n"
+        "   - Maintain original data types (CHAR, DATS, etc.)\n"
+        "   - Keep original length values\n"
+        "   - Output must be system-agnostic and reusable\n\n"
+        
+        "Example Output:\n"
+        "{\n"
+        "  \"Fields\": [\n"
+        "    {\"FieldName\": \"date from\", \"DataType\": \"DATS\", \"Length\": 8},\n"
+        "    {\"FieldName\": \"length of text\", \"DataType\": \"CHAR\", \"Length\": 40}\n"
+        "  ]\n"
+        "}"
+    ),
+    "BW4Cockpit (Stammdaten)": "From the provided SAP table screenshot, extract only structural metadata in JSON format:\n\n{\n  \"CleanedColumns\": [\"Cleaned\", \"column\", \"names\"],\n  \"HasLongTextColumn\": true/false,\n  \"LongTextConsistentStructure\": true/false or null,\n  \"InvalidLongTextValues\": [\"List of incorrect entries\"]\n}\n\nInstructions:\n- Extract and clean column names by removing any student- or object-specific suffixes (e.g., 'Semesterende TE8 018' → 'Semester'). - Replace entire name if it contains:\\n     - 'to' → Date to\\n     - 'from' → Date from\\n     - 'long' → Long text\\n     - 'shot' → Short text\\n - 'medium' → Medium text\\n - If it just contains 'date' -> 'Date' \\n \n- Return cleaned column names in 'CleanedColumns'.\n- Check whether a column named 'Long Text' exists:\n   - If yes, set 'HasLongTextColumn': true\n   - If no, set 'HasLongTextColumn': false, 'LongTextConsistentStructure': null, 'InvalidLongTextValues': []\n\n If 'HasLongTextColumn': true and  if there is a row, which contains 'BAU' for Example 'BAU - Bauwesen (Gi)' then set 'LongTextConsistentStructure': true.\n- Otherwise, set it to false and write 'Bauwesen(GI)' in 'InvalidLongTextValues'.\n\nReturn ONLY the metadata JSON. Do NOT extract or return full table data.",
+  "Data Source": (
+        "Analyze a DataSource definition screenshot in SAP BW (Eclipse) and extract these 4 metadata fields:\n\n"
+        "1. 'Zu ignorierende Kopfzeilen' (number of header rows to ignore)\n"
+        "2. 'Datenseparator' (field separator character presence)\n"
+        "3. 'Escape-Zeichen' (escape character presence)\n"
+        "4. 'Zahlenformat festlegen' checkbox status\n\n"
+        "Output format (strict JSON only):\n"
+        "{\n"
+        "  \"IgnoredHeaderRows\": number | null,\n"
+        "  \"FieldSeparatorSet\": true | false,\n"
+        "  \"EscapeCharacterSet\": true | false,\n"
+        "  \"ZahlenformatFestlegen\": true | false\n"
+        "}\n\n"
+        "Rules:\n"
+        "- For header rows: Return null if field is empty\n"
+        "- For separators/escape: true if any visible character exists\n"
+        "- For checkbox: true only if visibly checked (✓)\n"
+        "- Exclude all other information (paths, technical names, etc.)\n"
+        "- No additional comments or explanations"
+    ),
+  "Datenvorschau": (
+        "Analyze SAP BW4/HANA data preview screenshot and extract structured data based on table type:\n\n"
+        
+        "1. For 'Datenvorschau für DataSource' (or 'DataSource Preview') tables:\n"
+        "   - Extract ONLY column headers\n"
+        "   - Return as JSON list under 'Columns' key\n"
+        "   - Example: {'Columns': ['Header1', 'Header2', ...]}\n\n"
+        
+        "2. For 'BW Reporting Vorschau' (or 'BW Reporting Preview') tables:\n"
+        "   - Extract BOTH column headers AND last row values\n"
+        "   - Return as JSON object with headers as keys and last row as values\n"
+        "   - Example: {'Header1': 'Value1', 'Header2': 'Value2', ...}\n\n"
+        
+        "Processing Rules:\n"
+        "• Determine table type by its label before extraction\n"
+        "• For reporting previews, ONLY use the last row (totals row)\n"
+        "• Exclude all other interface elements and metadata\n"
+        "• Return empty object {} if no recognized table found\n\n"
+        
+        "Output Requirements:\n"
+        "- Strict JSON format only\n"
+        "- No additional explanations\n"
+        "- Case-sensitive headers\n"
+        "- Ignore non-data UI elements"
+    ),
+
+    "Bewegungsdaten": (
+        "Analyze structured text data file image and extract metadata with these rules:\n\n"
+
+        "1. DELIMITER DETECTION:\n"
+        "   - Identify the primary column separator character\n"
+        "   - Common delimiters: ; , | # TAB\n"
+        "   - Must appear consistently in first 5 rows\n\n"
+
+        "2. DATA EXTRACTION:\n"
+        "   a) First Data Row:\n"
+        "      - Extract first complete non-header row\n"
+        "      - Split using detected delimiter\n"
+        "      - Output as string array under 'FirstRow'\n"
+        "   b) Column Count:\n"
+        "      - Derived from 'FirstRow' array length\n\n"
+
+        "3. HEADER DETECTION:\n"
+        "   - If first row appears to contain column headers:\n"
+        "     * Extract header names\n"
+        "     * Output as string array under 'Columns'\n"
+        "   - Else: Set 'Columns': null\n\n"
+
+        "OUTPUT FORMAT (strict JSON):\n"
+        "{\n"
+        "  \"ColumnDelimiter\": \"character\",\n"
+        "  \"FirstRow\": [\"value1\", \"value2\", ...],\n"
+        "  \"ColumnCount\": number,\n"
+        "  \"Columns\": [\"header1\", \"header2\", ...] | null\n"
+        "}\n\n"
+
+        "VALIDATION RULES:\n"
+        "- Delimiter must be non-alphanumeric\n"
+        "- Skip empty/comment rows (starting with # or //)\n"
+        "- Trim whitespace from all values\n"
+        "- Return null for Columns if headers not detectable\n\n"
+
+        "EXAMPLE OUTPUTS:\n"
+        "1. With headers:\n"
+        "{\n"
+        "  \"ColumnDelimiter\": \";\",\n"
+        "  \"FirstRow\": [\"123\", \"2023-01-01\", \"Active\"],\n"
+        "  \"ColumnCount\": 3,\n"
+        "  \"Columns\": [\"ID\", \"Date\", \"Status\"]\n"
+        "}\n\n"
+        "2. Without headers:\n"
+        "{\n"
+        "  \"ColumnDelimiter\": \",\",\n"
+        "  \"FirstRow\": [\"A1\", \"B2\", \"C3\", \"D4\"],\n"
+        "  \"ColumnCount\": 4,\n"
+        "  \"Columns\": null\n"
+        "}"
+    ),
+    "Transformation": (
+        "Analyze SAP BW Transformation screenshot. Extract field mappings between Source and Target. Note. The connections between the Source and Target could intersect each other. "
+        "following these rules:\n"
+        "1. ONLY use visibly connected fields (follow connector lines)\n"
+        "2. REMOVE all technical identifiers (like TE007, TE 007 etc.)\n"
+        "3. Ignore fields that contain any of the following substrings (in either language):'hochschul', 'zeit', 'ort', 'daten', 'graphie'"
+        "4. NORMALIZE names of Source and Target if they contain the following Substrings by applying FIRST matching rule:\n"
+        "   'bereich' or 'depart'→'Fachbereich', 'bachelor'→'Bachelorarbeiten'\n"
+        "   'promo'→'Promotionen', 'studier'→'Studierenden'\n"
+        "   'dritt' or 'exter'→'Drittmittel', 'landes'→'Landesmittel'\n"
+        "   'semes'→'Semester', 'bund'or 'stat'→'Bundesland'\n"
+        "   'base'→'Base Unit of Measure'\n"
+        "   'krz'→'kuerzel', 'von' or 'from'→'gueltig von'm 'to' or 'bis' -> 'gueltig bis'\n"
+        "   'bez' or 'descri'→'Bezeichnung'\n"
+        "   'valid from' = gueltig von, 'valid to'= 'gueltig bis'"
+        "5. return OUTPUT  in JSON format (German only):\n"
+        "{\n"
+        "  \"Mappings\": [\n"
+        "    {\"Source\":\"normalized_name_in_source\", \"Target\":\"normalized_name_in_target\"},\n"
+        "    ...\n"
+        "  ],\n"
+        "  \"TotalMappings\": number\n"
+        "}"
+
+    ),
+    "Data Flow Object": (
+        "Analyze SAP BW Data Flow Object screenshot in Eclipse. Return:"
+        "1. Total count of objects (Objects are rectangles on the white background in the image.)"
+        "2. Whether ALL objects are interconnected\n\n"
+        "Rules:\n"
+        "- Entire system is 'fully connected' if:\n"
+        "  There are no isolated objects\n"
+        "return Output in JSON format:\n"
+        "{\n"
+        "  \"TotalObjects\": number,\n"
+        "  \"FullyConnected\": true|false\n"
+        "}"
+    ),
+  "DTP": (
+        "Analyze DTP (Data Transfer Process) monitor screenshot in SAP BW (Eclipse) and extract:\n"
+        "1. All visible data package names\n"
+        "2. Their corresponding record counts\n\n"
+        
+        "Output Format (strict JSON):\n"
+        "{\n"
+        "  \"DataPackages\": [\n"
+        "    {\"Name\": \"package_name\", \"RecordCount\": number},\n"
+        "    ...\n"
+        "  ]\n"
+        "}\n\n"
+        
+        "Processing Rules:\n"
+        "- Extract ONLY from 'Request Processing' section\n"
+        "- Include ONLY fully visible rows in the current view\n"
+        "- Never infer or summarize hidden/partial data\n"
+        "- RecordCount must be numeric (convert from string if needed)\n"
+        "- Exclude all other DTP metadata and UI elements\n\n"
+        
+        "Example Output:\n"
+        "{\n"
+        "  \"DataPackages\": [\n"
+        "    {\"Name\": \"Package_001\", \"RecordCount\": 1250},\n"
+        "    {\"Name\": \"Package_002\", \"RecordCount\": 843}\n"
+        "  ]\n"
+        "}"
+    ),
+
+    "Excel": (
+        "Analyze Excel screenshot and extract summary data with these exact rules:\n\n"
+        
+        "1. If BOTH 'Overall Result' COLUMN AND ROW EXIST:\n"
+        "   - Extract ONLY intersecting cell values between the column 'Overall Result' and row 'Overall Result'\n"
+        "   - Name keys as 'Overall Result_1', 'Overall Result_2',... (left-to-right order)\n"
+        "   Example: {\"Overall Result_1\": \"4,500\", \"Overall Result_2\": \"12%\"}\n\n"
+        
+        "2. If ONLY 'Overall Result' COLUMN EXISTS:\n"
+        "   - Use the corresponding ROW name as key name\n"
+        "   - Extract the cell value from 'Overall Result' \n"
+        "   Example: {\"Region\": \"North\"}\n\n"
+        
+        "3. If ONLY 'Overall Result' ROW EXISTS:\n"
+        "   - Use COLUMN name as key names\n"
+        "   - Extract values from 'Overall Result' of the columns\n"
+        "   Example: {\"Total Sales\": \"1,234\", \"Profit\": \"567\"}\n\n"
+        
+        "4. SPECIAL CASES:\n"
+        "   - If multiple matches in scenario 2/3, number them sequentially\n"
+        "   - Preserve original formatting (treat as strings)\n"
+        "   - Return {} if no valid data found\n\n"
+        
+        "OUTPUT REQUIREMENTS:\n"
+        "- Strict JSON format only\n"
+        "- No technical metadata\n"
+        "- Empty object if no matches\n"
+        "- Numbering starts at 1 for multiple values"
+    ),
+    "Composite Provider": (
+        "Analyze SAP BW Composite Provider screenshot. Extract field mappings between Source and Target "
+        "following these rules:\n"
+        "1. ONLY use visibly connected fields (follow connector lines)\n"
+        "2. REMOVE all technical identifiers (like TE007, TE 007 etc.)\n"
+        "3. Ignore fields that contain any of the following substrings (in either language):'hochschul', 'zeit', 'ort', 'daten', 'graphie'"
+        "4. NORMALIZE names of Source and Target if they contain the following Substrings by applying FIRST matching rule:\n"
+        "   'bereich' or 'depart'→'Fachbereich', 'bachelor'→'Bachelorarbeiten'\n"
+        "   'promo'→'Promotionen', 'studier'→'Studierenden'\n"
+        "   'dritt' or 'exter'→'Drittmittel', 'landes'→'Landesmittel'\n"
+        "   'semes'→'Semester', 'bund'or 'stat'→'Bundesland'\n"
+        "   'base'→'Base Unit of Measure'\n"
+        "5. return OUTPUT  in JSON format (German only):\n"
+        "{\n"
+        "  \"Mappings\": [\n"
+        "    {\"Source\":\"normalized_name_in_source\", \"Target\":\"normalized_name_in_target\"},\n"
+        "    ...\n"
+        "  ],\n"
+        "  \"TotalMappings\": number\n"
+        "}"
+    ),
+    "Query": (
+        "Analyze SAP BW Query definition screenshot in Eclipse and extract:\n\n"
+        
+        "1. FIELD EXTRACTION:\n"
+        "   - From 'Spalten'/'Columns (Kennzahlen)': Visible field labels (user-facing names only)\n"
+        "   - From 'Filter: Festwerter': Visible field labels (user-facing names only)\n"
+        "   - From 'Filter: Standardwerter': Visible field labels (user-facing names only)\n"
+        "   - From 'Zeilen'/'Rows': Visible field labels (user-facing names only)\n"
+        "   - From 'Freie Merkmale'/'Free Characteristics': Visible field labels\n"
+        "   Processing Rules:\n"
+        "   • Remove all technical names (TE-numbers like TE6 017)\n"
+        "   • Exclude content in square brackets []\n"
+        "   • Keep only plain text labels (e.g., 'Semester', not 'Semester TE8 012')\n\n"
+        
+        "2. PROPERTIES EXTRACTION:\n"
+        "   - 'Beschreibung'/'Description': Only if no TE-numbers present\n"
+        "   - 'Anzahl Dezimalstellen'/'Decimal Places': (e.g. '0,000' -> '3', '0,0'-> '1' , ) \n"
+        "     • Value if 'Anzeigen'/'Display' section visible\n"
+        "     • 'nicht vorhanden' if section not visible\n\n"
+        
+    
+        "3. QUERY NUMBER EXTRACTION:\n"
+        "   - From title (e.g., 'Datenblatt-Definition: TE8_012_Q5_HS')\n"
+        "   - Extract only Q1-Q5 format\n"
+        "   - For malformed versions (e.g., 'Q112' → 'Q1')\n\n"
+        
+        "OUTPUT FORMAT (strict JSON):\n"
+        "{\n"
+        "  \"Query\": \"Q1-Q5\",\n"
+        "  \"Columns\": [\"label1\", \"label2\", ...],\n"
+        "  \"Rows\": [\"label1\", \"label2\", ...],\n"
+        "  \"Filter: Festwerter\": [\"label1\", \"label2\", ...],\n"
+        "  \"Filter: Standardwerter\": [\"label1\", \"label2\", ...],\n"
+        "  \"FreeCharacteristics\": [\"label1\", \"label2\", ...],\n"
+        "  \"Description\": \"text\" | null,\n"
+        "  \"DecimalPlaces\": \"number\" | \"nicht vorhanden\"\n"
+        "}\n\n"
+        
+        "VALIDATION RULES:\n"
+        "- Return null for Description if it contains TE-numbers\n"
+        "- Arrays should be empty if no valid fields found\n"
+        "- No technical names in output\n"
+        "- No explanations or metadata\n\n"
+        
+        "EXAMPLE OUTPUT:\n"
+        "{\n"
+        "  \"Query\": \"Q3\",\n"
+        "  \"Columns\": [\"Fachbereich\", \"Anzahl Studierende\"],\n"
+        "  \"Rows\": [\"Jahr\", \"Semester\"],\n"
+        "  \"Filter: Festwerter\": [\"Semester\"\n"
+        "  \"Filter: Standardwerter\": [\"Land\"\n"
+        "  \"FreeCharacteristics\": [\"Campus\"],\n"
+        "  \"Description\": \"Student enrollment statistics\",\n"
+        "  \"DecimalPlaces\": \"2\"\n"
+        "}"
+    ),
+    "Data Mart": (
+        "Analyze SAP BW DataStore Object (Advanced) screenshot. "
+        "Determine ONLY whether the 'DataMart' option is selected in the 'Modellierungseigenschaften' section. "
+        "Output format (strict JSON):\n"
+        "{\n"
+        "  \"DataMartSelected\": true|false\n"
+        "}\n\n"
+        "Rules:\n"
+        "- Return true ONLY if the DataMart radio button or checkbox is visibly selected\n"
+        "- Return false if unselected, grayed out, or not present\n"
+        "- Output must contain ONLY this boolean value\n"
+        "- No additional fields or explanations"
+    ),
+    "Data Store Object": (
+        "Analyze SAP BW DataStore Object (Advanced) screenshot and extract ONLY selected options "
+        "from 'Modellierungseigenschaften' section.\n\n"
+        
+        "Processing Rules:\n"
+        "1. Rename selected options as follows:\n"
+        "   - Contains 'Staging' → 'Staging-DataStore-Objekt'\n"
+        "   - Contains 'Eingangs' or Inbound → 'Nur Eingangs-Queue'\n"
+        "2. Automatically consider 'Staging-DataStore-Objekt' selected if 'Nur Eingangs-Queue' is selected\n"
+        "3. Ignore unselected/grayed-out options\n"
+        "4. Exclude fields containing these substrings:\n"
+        "   - 'Hot', 'Cold', 'Warm', 'Objektebene', 'Auf', 'Partitionsebene'\n"
+        "5. Never extract technical names or personal identifiers\n\n"
+        
+        "Output Format (strict JSON):\n"
+        "{\n"
+        "  \"Staging-DataStore-Objekt\": : true|false\n"
+        "  \"Nur Eingangs-Queue\": : true|false\n"
+        "  ...\n"
+        "}\n\n"
+    ),
 }
 
 def get_prompt(photo_type: str) -> str:

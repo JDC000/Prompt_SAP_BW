@@ -52,6 +52,64 @@ class OpenRouterClient:
         self.debug_save_path = "/Users/jennycao/Desktop/Thesis/Debug_save_path"
         os.makedirs(self.debug_save_path, exist_ok=True)
 
+    def _preprocess_image_based_on_prompt(self, base64_img: str, prompt_type: str) -> str:
+        """
+        Tiền xử lý ảnh dựa trên loại prompt được chọn
+
+        Args:
+            base64_img: Ảnh đầu vào dạng base64
+            prompt_type: Loại prompt (Composite Provider, Transformationen,...)
+
+        Returns:
+            Base64 của ảnh đã được xử lý
+        """
+
+        if prompt_type.lower() not in ["Composite Provider", "Transformation"]:
+            return base64_img
+
+        try:
+            # Chuyển base64 thành ảnh OpenCV
+            if base64_img.startswith(("data:image/jpeg;base64,", "data:image/png;base64,")):
+                base64_img = base64_img.split(",", 1)[-1]
+
+            decoded = base64.b64decode(base64_img)
+            np_arr = np.frombuffer(decoded, np.uint8)
+            image = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+
+            # Phát hiện vùng cần zoom (phần liên kết Source-Target)
+            # Đây là logic cần điều chỉnh dựa trên đặc điểm ảnh thực tế
+            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+            edges = cv2.Canny(gray, 50, 150)
+
+            # Tìm contours của các khối liên kết
+            contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+            # Lọc và chọn vùng quan tâm (ROI)
+            # Giả định: Vùng liên kết là contour lớn thứ 2 (sau title)
+            if len(contours) > 1:
+                contours = sorted(contours, key=cv2.contourArea, reverse=True)
+                x, y, w, h = cv2.boundingRect(contours[1])
+
+                # Thêm padding xung quanh ROI
+                padding = int(min(w, h) * 0.2)
+                x = max(0, x - padding)
+                y = max(0, y - padding)
+                w = min(image.shape[1] - x, w + 2 * padding)
+                h = min(image.shape[0] - y, h + 2 * padding)
+
+                # Crop ảnh
+                zoomed_img = image[y:y + h, x:x + w]
+                self.save_debug_image(zoomed_img, "zoomed")
+                # Chuyển lại thành base64
+                _, buffer = cv2.imencode('.png', zoomed_img)
+                processed_base64 = base64.b64encode(buffer).decode()
+                return f"data:image/png;base64,{processed_base64}"
+
+        except Exception as e:
+            logger.error(f"Lỗi tiền xử lý ảnh: {str(e)}")
+
+        return base64_img
+
     def save_debug_image(self, image: np.ndarray, prefix: str = "debug") -> Optional[str]:
         """Save debug image to specified directory with timestamp prefix
 
@@ -172,6 +230,7 @@ class OpenRouterClient:
         return None
 
     def generate_json_from_image(self, base64_img: str, photo_type: str) -> Dict:
+        preprocessed_img = self._preprocess_image_based_on_prompt(base64_img, photo_type)
         # Hauptfunktion: Bild senden und JSON von Modell extrahieren
         prepared_image = self._prepare_image_data(base64_img)
         if not prepared_image:
