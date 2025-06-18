@@ -158,10 +158,11 @@ PROMPTS = {
         "5. return OUTPUT  in JSON format (German only):\n"
         "{\n"
         "  \"Mappings\": [\n"
+        "  \"TotalMappings\": number\n"
         "    {\"Source\":\"normalized_name_in_source\", \"Target\":\"normalized_name_in_target\"},\n"
         "    ...\n"
         "  ],\n"
-        "  \"TotalMappings\": number\n"
+        
         "}"
 
     ),
@@ -251,10 +252,11 @@ PROMPTS = {
         "5. return OUTPUT  in JSON format (German only):\n"
         "{\n"
         "  \"Mappings\": [\n"
+        "  \"TotalMappings\": number\n"
         "    {\"Source\":\"normalized_name_in_source\", \"Target\":\"normalized_name_in_target\"},\n"
         "    ...\n"
         "  ],\n"
-        "  \"TotalMappings\": number\n"
+        
         "}"
     ),
     "Query": (

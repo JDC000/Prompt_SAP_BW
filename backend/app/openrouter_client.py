@@ -1,3 +1,4 @@
+# Standard- und Drittanbieter-Imports für Bildverarbeitung, Logging, Umgebungsvariablen und OpenAI-API
 import os
 import json
 import base64
@@ -13,205 +14,169 @@ from openai import OpenAI
 from dotenv import load_dotenv
 import cv2
 
+# Lokaler Import eines Prompt-Generators
 from .prompts import get_prompt
 
-# Lade Umgebungsvariablen aus der .env-Datei
+
+# Lade die Umgebungsvariablen aus einer .env-Datei (z. B. API-Keys)
 load_dotenv()
 
-# Initialisiere Logger
+# Konfiguriere das Logging-Modul zur Ausgabe von Informationen auf Konsole
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+
 class OpenRouterClient:
     def __init__(self):
-        # API-Key aus Umgebungsvariablen lesen
+        # Hole den OpenRouter API-Key aus den Umgebungsvariablen
         api_key = os.getenv("OPENROUTER_API_KEY")
         if not api_key:
             raise EnvironmentError("OPENROUTER_API_KEY fehlt in den Umgebungsvariablen.")
 
-        # Initialisiere OpenAI-Client mit OpenRouter-API
+        # Initialisiere den OpenAI-Client zur Kommunikation mit der OpenRouter-Schnittstelle
         self.client = OpenAI(
             base_url="https://openrouter.ai/api/v1",
             api_key=api_key
         )
 
-        # Zusätzliche Header für den API-Aufruf
+        # Definiere zusätzliche HTTP-Header für die API-Anfrage
         self.headers = {
             "HTTP-Referer": os.getenv("HTTP_REFERER", "http://localhost"),
             "X-Title": os.getenv("APP_TITLE", "SAP BW Image Comparator"),
             "Content-Type": "application/json"
         }
 
-        # Konfiguration des Modells und der Anfragelogik
-        self.model = "qwen/qwen2.5-vl-72b-instruct"
-        self.max_tokens = 2048
-        self.max_retries = 3
-        self.timeout = 30
+        # Modellkonfiguration
+        self.model = "qwen/qwen2.5-vl-72b-instruct:free"  # Spezifiziert das zu verwendende Sprach-/Bildmodell
+        self.max_tokens = 2048                      # Maximale Anzahl an Token in der Antwort
+        self.max_retries = 3                        # Anzahl der Wiederholungsversuche bei Fehler
+        self.timeout = 30                           # Timeout in Sekunden
 
+        # Pfad zum Speichern von Debug-Bildern
         self.debug_save_path = "/Users/jennycao/Desktop/Thesis/Debug_save_path"
         os.makedirs(self.debug_save_path, exist_ok=True)
-
-    def _preprocess_image_based_on_prompt(self, base64_img: str, prompt_type: str) -> str:
-        """
-        Tiền xử lý ảnh dựa trên loại prompt được chọn
-
-        Args:
-            base64_img: Ảnh đầu vào dạng base64
-            prompt_type: Loại prompt (Composite Provider, Transformationen,...)
-
-        Returns:
-            Base64 của ảnh đã được xử lý
-        """
-
-        if prompt_type.lower() not in ["Composite Provider", "Transformation"]:
-            return base64_img
-
-        try:
-            # Chuyển base64 thành ảnh OpenCV
-            if base64_img.startswith(("data:image/jpeg;base64,", "data:image/png;base64,")):
-                base64_img = base64_img.split(",", 1)[-1]
-
-            decoded = base64.b64decode(base64_img)
-            np_arr = np.frombuffer(decoded, np.uint8)
-            image = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-
-            # Phát hiện vùng cần zoom (phần liên kết Source-Target)
-            # Đây là logic cần điều chỉnh dựa trên đặc điểm ảnh thực tế
-            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-            edges = cv2.Canny(gray, 50, 150)
-
-            # Tìm contours của các khối liên kết
-            contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-            # Lọc và chọn vùng quan tâm (ROI)
-            # Giả định: Vùng liên kết là contour lớn thứ 2 (sau title)
-            if len(contours) > 1:
-                contours = sorted(contours, key=cv2.contourArea, reverse=True)
-                x, y, w, h = cv2.boundingRect(contours[1])
-
-                # Thêm padding xung quanh ROI
-                padding = int(min(w, h) * 0.2)
-                x = max(0, x - padding)
-                y = max(0, y - padding)
-                w = min(image.shape[1] - x, w + 2 * padding)
-                h = min(image.shape[0] - y, h + 2 * padding)
-
-                # Crop ảnh
-                zoomed_img = image[y:y + h, x:x + w]
-                self.save_debug_image(zoomed_img, "zoomed")
-                # Chuyển lại thành base64
-                _, buffer = cv2.imencode('.png', zoomed_img)
-                processed_base64 = base64.b64encode(buffer).decode()
-                return f"data:image/png;base64,{processed_base64}"
-
-        except Exception as e:
-            logger.error(f"Lỗi tiền xử lý ảnh: {str(e)}")
-
-        return base64_img
+        self.reference_json = {...}
 
     def save_debug_image(self, image: np.ndarray, prefix: str = "debug") -> Optional[str]:
-        """Save debug image to specified directory with timestamp prefix
-
-        Args:
-            image: numpy array representing the image
-            prefix: filename prefix for the saved image
-
-        Returns:
-            str: Path to saved image if successful, None otherwise
+        """
+        Speichert ein Debug-Bild mit Zeitstempel zur späteren Analyse.
         """
         try:
-            # Validate input
             if not isinstance(image, np.ndarray):
-                logger.error("Invalid image type, expected numpy array")
+                logger.error("Ungültiger Bildtyp, numpy-Array erwartet.")
                 return None
-
-            # Check if debug directory exists and is writable
-            if not os.path.exists(self.debug_save_path):
-                os.makedirs(self.debug_save_path, exist_ok=True)
 
             if not os.access(self.debug_save_path, os.W_OK):
-                logger.error(f"No write permission for debug directory: {self.debug_save_path}")
+                logger.error(f"Kein Schreibzugriff auf das Debug-Verzeichnis: {self.debug_save_path}")
                 return None
 
-            # Generate timestamp and filename
             timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f")
             filename = f"{prefix}_{timestamp}.png"
             filepath = os.path.join(self.debug_save_path, filename)
 
-            # Convert color space if needed (OpenCV uses BGR by default)
+            # Konvertiere BGR zu RGB für korrekte Farbdarstellung
             if len(image.shape) == 3 and image.shape[2] == 3:
                 image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
-            # Save image
             success = cv2.imwrite(filepath, image)
             if success:
-                logger.info(f"Saved debug image to: {filepath}")
+                logger.info(f"Debug-Bild gespeichert: {filepath}")
                 return filepath
             else:
-                logger.error(f"Failed to save debug image to: {filepath}")
+                logger.error(f"Speichern fehlgeschlagen: {filepath}")
                 return None
 
         except Exception as e:
-            logger.error(f"Error saving debug image: {str(e)}", exc_info=True)
+            logger.error(f"Fehler beim Speichern des Debug-Bildes: {str(e)}", exc_info=True)
             return None
-
 
     def _prepare_image_data(self, base64_img: str) -> Optional[str]:
-        # Validierung und Konvertierung von Base64-Bilddaten in ein standardisiertes PNG
-        if not base64_img or not isinstance(base64_img, str):
-            return None
+        """
+        Validiert, skaliert und konvertiert ein Base64-kodiertes Bild zu einem standardisierten
+        PNG-Bild im Format 2048x2048, das für die API-Eingabe geeignet ist.
+        """
 
-        # Entferne Data-URI-Prefix falls vorhanden
+        # Überprüfe, ob ein gültiger Base64-String übergeben wurde
+        if not base64_img or not isinstance(base64_img, str):
+            return None  # Ungültiger Eingabewert
+
+        # Entfernt den optionalen Data-URI-Präfix (z. B. "data:image/png;base64,") vom String
         if base64_img.startswith(("data:image/jpeg;base64,", "data:image/png;base64,", "data:image/gif;base64,")):
             base64_img = base64_img.split(",", 1)[-1]
 
         try:
-            # Validierung der Base64-Länge und erlaubten Zeichen
+            # Validierung: Länge des Base64-Strings muss durch 4 teilbar sein
             if len(base64_img) % 4 != 0:
-                raise ValueError("Invalid Base64 length")
-            if not re.fullmatch(r'^[A-Za-z0-9+/]+={0,2}$', base64_img):
-                raise ValueError("Invalid Base64 characters")
+                raise ValueError("Ungültige Base64-Länge")
 
-            # Dekodieren des Base64-Strings zu einem Bild
+            # Validierung: String darf nur Base64-konforme Zeichen enthalten
+            if not re.fullmatch(r'^[A-Za-z0-9+/]+={0,2}$', base64_img):
+                raise ValueError("Ungültige Base64-Zeichen gefunden")
+
+            # Dekodiert den Base64-String zu Bytes
             decoded = base64.b64decode(base64_img, validate=True)
+
+            # Wandelt Byte-Daten in ein NumPy-Array (OpenCV benötigt das)
             np_arr = np.frombuffer(decoded, np.uint8)
+
+            # Dekodiert das NumPy-Array als Farbbild (BGR) mit OpenCV
             image = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
 
+            # Falls das Bild nicht korrekt geladen wurde
             if image is None:
-                raise ValueError("Could not decode image")
+                raise ValueError("Bild konnte nicht dekodiert werden")
 
-            # Resize des Bildes unter Beibehaltung des Seitenverhältnisses
+            # Ermittelt Höhe und Breite des Originalbilds
             height, width = image.shape[:2]
+
+            # Berechnet Skalierungsfaktor: das größere Maß soll 2048px sein
             scale = 2048 / max(height, width)
             new_dim = (int(width * scale), int(height * scale))
+
+            # Skaliert das Bild proportional auf die neue Größe
             resized = cv2.resize(image, new_dim)
 
-            # Padding hinzufügen, um das Bild auf 1024x1024 zu bringen
-            padded = np.ones((2048, 2048, 3), dtype=np.uint8) * 255
+            # Erstellt ein weißes Quadrat von 2048x2048 Pixeln als Hintergrund
+            padded = np.ones((2048, 2048, 3), dtype=np.uint8) * 255  # RGB: (255, 255, 255) = Weiß
+
+            # Berechnet den Abstand, um das Bild mittig einzufügen (Padding)
             pad_x = (2048 - new_dim[0]) // 2
             pad_y = (2048 - new_dim[1]) // 2
+
+            # Fügt das skalierte Bild zentriert in das weiße Quadrat ein
             padded[pad_y:pad_y + new_dim[1], pad_x:pad_x + new_dim[0]] = resized
 
+            # Speichert das Bild optional zu Debug-Zwecken
             self.save_debug_image(padded, "padded")
-            # Konvertierung zu PNG und zurück zu Base64
+
+            # Konvertiert das gepaddete Bild in ein PIL-Image (für PNG-Speicherung)
             pil_img = Image.fromarray(padded)
+
+            # Speichert das PIL-Image in einen Zwischenspeicher (BytesIO)
             buffered = BytesIO()
             pil_img.save(buffered, format="PNG")
+
+            # Kodiert den PNG-Byteinhalt wieder zu Base64
             processed_base64 = base64.b64encode(buffered.getvalue()).decode()
 
+            # Gibt den finalen Base64-String mit PNG-Data-URI zurück
             return f"data:image/png;base64,{processed_base64}"
 
+        # Fehlerbehandlung: ungültige Base64-Formate oder Zeichen
         except (ValueError, binascii.Error) as e:
-            logger.error(f"Image validation failed: {str(e)}")
+            logger.error(f"Bildvalidierung fehlgeschlagen: {str(e)}")
             return None
 
+        # Fehlerbehandlung: alle anderen unerwarteten Fehler
         except Exception as e:
-            logger.exception("Unexpected error during image preparation")
+            logger.exception("Unerwarteter Fehler während der Bildvorbereitung")
             return None
 
     def _extract_json(self, raw_text: str) -> Optional[Union[Dict, List]]:
-        # Versucht, ein JSON-Objekt aus einem String zu extrahieren
+        """
+        Extrahiert ein JSON-Objekt aus einem beliebigen Text – hilfreich bei "verrauschten" Antworten.
+        """
         if not raw_text or not isinstance(raw_text, str):
             return None
 
@@ -226,18 +191,18 @@ class OpenRouterClient:
                         extracted = extracted.rsplit(',', 1)[0] + ('}' if '{' in extracted else ']')
                     return json.loads(extracted)
             except Exception as e:
-                logger.warning(f"JSON extraction failed: {str(e)}", extra={"input_sample": raw_text[:100] + "..."})
+                logger.warning(f"JSON-Extraktion fehlgeschlagen: {str(e)}",
+                               extra={"input_sample": raw_text[:100] + "..."})
         return None
 
     def generate_json_from_image(self, base64_img: str, photo_type: str) -> Dict:
-        preprocessed_img = self._preprocess_image_based_on_prompt(base64_img, photo_type)
-        # Hauptfunktion: Bild senden und JSON von Modell extrahieren
+        """
+        Wandelt ein Bild in JSON um, basierend auf einem bestimmten Prompt-Typ.
+        Führt mehrere Schritte aus: Vorverarbeitung, Vorbereitung, Modellaufruf, Fehlerbehandlung.
+        """
         prepared_image = self._prepare_image_data(base64_img)
         if not prepared_image:
-            return {
-                "error": "Ungültiges Bildformat",
-                "details": "Base64-Bildvalidierung fehlgeschlagen"
-            }
+            return {"error": "Ungültiges Bildformat", "details": "Base64-Bildvalidierung fehlgeschlagen"}
 
         prompt = f"{get_prompt(photo_type)}\nGeben Sie nur JSON gemäß der festgelegten Struktur zurück, ohne zusätzlichen Text."
 
@@ -246,19 +211,14 @@ class OpenRouterClient:
                 response = self.client.chat.completions.create(
                     model=self.model,
                     extra_headers=self.headers,
-                    messages=[
-                        {
-                            "role": "user",
-                            "content": [
-                                {"type": "text", "text": prompt},
-                                {"type": "image_url", "image_url": {"url": prepared_image}}
-                            ]
-                        }
-                    ],
+                    messages=[{"role": "user", "content": [{"type": "text", "text": prompt}, {"type": "image_url",
+                                                                                              "image_url": {
+                                                                                                  "url": prepared_image}}]}],
                     max_tokens=self.max_tokens,
                     temperature=0.01,
                     response_format={"type": "json_object"},
-                    timeout=self.timeout
+                    timeout=self.timeout,
+                    seed = 42
                 )
 
                 if response and response.choices and len(response.choices) > 0 and response.choices[0].message and \
@@ -266,49 +226,26 @@ class OpenRouterClient:
                     raw_output = response.choices[0].message.content.strip()
                     logger.debug(f"Roh-API-Antwort: {raw_output[:200]}...")
                     parsed = self._extract_json(raw_output)
+
                     if parsed:
+
                         return parsed
 
-                    return {
-                        "error": "Ungültige JSON-Antwort",
-                        "raw_output": raw_output,
-                        "suggestion": "Das Modell hat ein fehlerhaftes JSON zurückgegeben. Bitte versuchen Sie es erneut."
-                    }
-                else:
-                    logger.error(f"Leere oder fehlerhafte Antwort von OpenRouter (Versuch {attempt + 1}): {response}")
-                    if attempt == self.max_retries - 1:
-                        return {
-                            "error": "Leere Antwort von der API nach mehreren Versuchen",
-                            "raw_response": str(response)
-                        }
-
-            except json.JSONDecodeError as je:
-                logger.error(f"JSON-Decodierungsfehler (Versuch {attempt + 1}): {str(je)}")
-                if attempt == self.max_retries - 1:
-                    return {
-                        "error": "JSON-Parsing fehlgeschlagen nach mehreren Versuchen",
-                        "exception": str(je),
-                        "raw_output": raw_output if 'padded' in locals() else None
-                    }
+                    return {"error": "Ungültige JSON-Antwort", "raw_output": raw_output}
 
             except Exception as e:
                 logger.error(f"API-Aufruf fehlgeschlagen (Versuch {attempt + 1}): {str(e)}")
                 if attempt == self.max_retries - 1:
-                    return {
-                        "error": "API-Anfrage fehlgeschlagen",
-                        "exception": str(e)
-                    }
+                    return {"error": "API-Anfrage fehlgeschlagen", "exception": str(e)}
 
         return {"error": "Maximale Versuche überschritten"}
 
-    def compare_jsons(
-            self,
-            reference: Union[Dict, List],
-            candidate: Union[Dict, List],
-            ignore_fields: List[str] = None,
-            word_match_fields: List[str] = None
-    ) -> List[Dict]:
-        # Vergleicht zwei JSON-Objekte mit verschiedenen Optionen
+    def compare_jsons(self, reference: Union[Dict, List], candidate: Union[Dict, List], ignore_fields: List[str] = None,
+                      word_match_fields: List[str] = None) -> List[Dict]:
+        """
+        Vergleicht zwei JSON-Strukturen, mit Unterstützung für Feld-Ausschlüsse und unscharfe Wortvergleiche.
+        Gibt eine Liste mit Unterschieden zurück.
+        """
         if ignore_fields is None:
             ignore_fields = []
         if word_match_fields is None:
@@ -317,7 +254,6 @@ class OpenRouterClient:
         diffs = []
 
         def compare_words(ref_str: str, cand_str: str) -> bool:
-            # Vergleicht Wörter in Strings (case-insensitiv)
             if not isinstance(ref_str, str) or not isinstance(cand_str, str):
                 return False
             ref_words = set(ref_str.lower().split())
@@ -325,7 +261,6 @@ class OpenRouterClient:
             return ref_words.issubset(cand_words)
 
         def compare_items(ref, cand, path=""):
-            # Rekursiver Vergleich von JSON-Elementen
             if isinstance(ref, dict) and isinstance(cand, dict):
                 gemeinsame_keys = set(ref.keys()).intersection(cand.keys())
                 for key in gemeinsame_keys:
@@ -334,67 +269,37 @@ class OpenRouterClient:
                     new_path = f"{path}.{key}" if path else key
                     if key in word_match_fields and isinstance(ref[key], str) and isinstance(cand[key], str):
                         if not compare_words(ref[key], cand[key]):
-                            diffs.append({
-                                "path": new_path,
-                                "reference": ref[key],
-                                "candidate": cand[key],
-                                "type": "word_mismatch"
-                            })
+                            diffs.append({"path": new_path, "reference": ref[key], "candidate": cand[key],
+                                          "type": "word_mismatch"})
                     else:
                         compare_items(ref[key], cand[key], new_path)
-                ref_only_keys = set(ref.keys()) - set(cand.keys())
-                for key in ref_only_keys:
+                for key in set(ref.keys()) - set(cand.keys()):
                     if key in ignore_fields:
                         continue
-                    new_path = f"{path}.{key}" if path else key
-                    diffs.append({
-                        "path": new_path,
-                        "reference": ref[key],
-                        "candidate": None,
-                        "type": "value is missing in candidate"
-                    })
-                cand_only_keys = set(cand.keys()) - set(ref.keys())
-                for key in cand_only_keys:
+                    diffs.append({"path": f"{path}.{key}" if path else key, "reference": ref[key], "candidate": None,
+                                  "type": "value is missing in candidate"})
+                for key in set(cand.keys()) - set(ref.keys()):
                     if key in ignore_fields:
                         continue
-                    new_path = f"{path}.{key}" if path else key
-                    diffs.append({
-                        "path": new_path,
-                        "reference": None,
-                        "candidate": cand[key],
-                        "type": "value is missing in reference"
-                    })
+                    diffs.append({"path": f"{path}.{key}" if path else key, "reference": None, "candidate": cand[key],
+                                  "type": "value is missing in reference"})
             elif isinstance(ref, list) and isinstance(cand, list):
                 for i, (r, c) in enumerate(zip(ref, cand)):
                     compare_items(r, c, f"{path}[{i}]")
                 if len(ref) != len(cand):
-                    min_len = min(len(ref), len(cand))
-                    max_len = max(len(ref), len(cand))
-                    for i in range(min_len, max_len):
+                    for i in range(min(len(ref), len(cand)), max(len(ref), len(cand))):
                         if i < len(ref):
-                            diffs.append({
-                                "path": f"{path}[{i}]",
-                                "reference": ref[i],
-                                "candidate": None,
-                                "type": "value is missing in candidate"
-                            })
+                            diffs.append({"path": f"{path}[{i}]", "reference": ref[i], "candidate": None,
+                                          "type": "value is missing in candidate"})
                         else:
-                            diffs.append({
-                                "path": f"{path}[{i}]",
-                                "reference": None,
-                                "candidate": cand[i],
-                                "type": "value is missing in reference"
-                            })
+                            diffs.append({"path": f"{path}[{i}]", "reference": None, "candidate": cand[i],
+                                          "type": "value is missing in reference"})
             elif ref != cand:
-                diffs.append({
-                    "path": path,
-                    "reference": ref,
-                    "candidate": cand,
-                    "type": "value_mismatch"
-                })
+                diffs.append({"path": path, "reference": ref, "candidate": cand, "type": "value_mismatch"})
 
         compare_items(reference, candidate)
         return diffs
+
 
 # Erstelle eine Singleton-Instanz des Clients
 client = OpenRouterClient()
