@@ -1,6 +1,6 @@
 PROMPTS = {
   "ABAP Dictionary": (
-        "Analyze SAP Dictionary Display Table screenshot and extract core technical structure.\n\n"
+        "Analyze SAP Dictionary Display Table screenshot and extract core technical structure .\n\n"
         
         "Output Requirements:\n"
         "{\n"
@@ -14,9 +14,10 @@ PROMPTS = {
         "  ]\n"
         "}\n\n"
         
-        "Field Processing Rules:\n"
-        "1. Name Normalization:\n"
+        "Field  Processing Rules:\n"
+        "1. Name Normalization.\n"
         "   - Convert all to lowercase\n"
+        "   - if the 'field' column (or 'Feld' Spalte) contains the followings Substring then rename to:"  
         "   - 'to' → 'date to' (e.g., 'dateto' → 'date to')\n"
         "   - 'from' → 'date from' (e.g., 'datefrom' → 'date from')\n"
         "   - 'txt' → 'length of text' (e.g., 'txtlg' → 'length of text')\n"
@@ -25,7 +26,7 @@ PROMPTS = {
         "2. Field Exclusion:\n"
         "   - Remove fields containing '/BIC/'\n"
         "   - Remove personal identifiers\n"
-        "   - Remove descriptive fields (Short Description, Kurzbeschreibung, etc.)\n\n"
+        
         
         "3. Technical Requirements:\n"
         "   - Include only: FieldName, DataType, Length\n"
