@@ -48,7 +48,7 @@ class OpenRouterClient:
         }
 
         # Modellkonfiguration
-        self.model = "qwen/qwen2.5-vl-72b-instruct"  # Spezifiziert das zu verwendende Sprach-/Bildmodell
+        self.model = "google/gemini-2.5-flash-lite-preview-06-17"  # Spezifiziert das zu verwendende Sprach-/Bildmodell
         self.max_tokens = 2048                      # Maximale Anzahl an Token in der Antwort
         self.max_retries = 3                        # Anzahl der Wiederholungsversuche bei Fehler
         self.timeout = 30                           # Timeout in Sekunden
@@ -173,7 +173,8 @@ class OpenRouterClient:
             logger.exception("Unerwarteter Fehler während der Bildvorbereitung")
             return None
 
-    def _extract_json(self, raw_text: str) -> Optional[Union[Dict, List]]:
+    @staticmethod
+    def _extract_json(raw_text: str) -> Optional[Union[Dict, List]]:
         """
         Extrahiert ein JSON-Objekt aus einem beliebigen Text – hilfreich bei "verrauschten" Antworten.
         """
