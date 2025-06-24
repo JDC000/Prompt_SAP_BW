@@ -248,7 +248,7 @@ PROMPTS = {
         "  \"FullyConnected\": true|false\n"
         "}"
     ),
-  "DTP": (
+    "DTP": (
         "Analyze DTP (Data Transfer Process) monitor screenshot in SAP BW (Eclipse) and extract:\n"
         "1. All visible data package names\n"
         "2. Their corresponding record counts\n\n"
@@ -310,11 +310,11 @@ PROMPTS = {
         "Analyze SAP BW Composite Provider screenshot. Extract field mappings between Source and Target "
         "following these rules:\n"
         "1. ONLY use visibly connected fields (follow connector lines)\n"
-        "2. REMOVE all technical identifiers (like TE007, TE 007 etc.)\n"
-        "3. Ignore fields that contain any of the following substrings (in either language):'hochschul', 'zeit', 'ort', 'daten', 'graphie'"
+        "2. REMOVE all technical identifiers (like TE007, TE 007 etc.) and then convert them all into lower case\n"
+        "3. Ignore fields or rows, which contain  the following substrings:'hochschul', 'zeit', 'ort', 'daten', 'geogra' (e.g. 'geografie')"
         "4. NORMALIZE names of Source and Target if they contain the following Substrings by applying FIRST matching rule:\n"
-        "   'bereich' or 'depart'→'Fachbereich', 'bachelor'→'Bachelorarbeiten'\n"
-        "   'promo'→'Promotionen', 'studier'→'Studierenden'\n"
+        "   'bereich' or 'depart'→'Fachbereich', 'bachelor' or 'anzahlbache'→'Bachelorarbeiten'\n"
+        "   'promo' or 'anzahlpromo'→'Promotionen', 'studier' or 'anzahlstu'→'Studierenden'\n"
         "   'dritt' or 'exter'→'Drittmittel', 'landes'→'Landesmittel'\n"
         "   'semes'→'Semester', 'bund'or 'stat'→'Bundesland'\n"
         "   'base'→'Base Unit of Measure'\n"
@@ -333,16 +333,24 @@ PROMPTS = {
         
         "1. FIELD EXTRACTION:\n"
         "   - From 'Spalten'/'Columns (Kennzahlen)': Visible field labels (user-facing names only)\n"
-        "   - From 'Filter: Festwerter': Visible field labels (user-facing names only)\n"
-        "   - From 'Filter: Standardwerter': Visible field labels (user-facing names only)\n"
+        "   - From 'Filter: Festwerter' /'Fixed Values': Visible field labels (user-facing names only)\n"
+        "   - From 'Filter: Standardwerter' / 'Default Values': Visible field labels (user-facing names only)\n"
         "   - From 'Zeilen'/'Rows': Visible field labels (user-facing names only)\n"
         "   - From 'Freie Merkmale'/'Free Characteristics': Visible field labels\n"
         "   Processing Rules:\n"
         "   • Remove all technical names (TE-numbers like TE6 017)\n"
         "   • Exclude content in square brackets []\n"
         "   • Keep only plain text labels (e.g., 'Semester', not 'Semester TE8 012')\n\n"
+        "2. NORMALIZE names. Convert all into lower case. if they contain the following Substrings by applying FIRST matching rule:\n"
+        "   'anzahl bache' →'anzahl bachelorarbeiten'\n"
+        "   ' anzahl der prom' →'Anzahl der promotionen'\n"
+        "   'anzahl der stud'-> 'anzahl der studierenden'\n"
+        "   'fachbe'→'fachbereich'\n"
+        "   'land' or 'bundes'→'bundesland'\n"
+        "   'seme'→'semester'\n"
         
-        "2. PROPERTIES EXTRACTION:\n"
+        
+        "3. PROPERTIES EXTRACTION:\n"
         "   - 'Beschreibung'/'Description': Only if no TE-numbers present\n"
         "   - 'Anzahl Dezimalstellen'/'Decimal Places': (e.g. '0,000' -> '3', '0,0'-> '1' , ) \n"
         "     • Value if 'Anzeigen'/'Display' section visible\n"
@@ -385,7 +393,7 @@ PROMPTS = {
         "}"
     ),
     "Data Mart": (
-        "Analyze SAP BW DataStore Object (Advanced) screenshot. "
+        "Analyze SAP BW Data Mart screenshot. "
         "Determine ONLY whether the 'DataMart' option is selected in the 'Modellierungseigenschaften' section. "
         "Output format (strict JSON):\n"
         "{\n"
@@ -398,26 +406,18 @@ PROMPTS = {
         "- No additional fields or explanations"
     ),
     "Data Store Object": (
-        "Analyze SAP BW DataStore Object (Advanced) screenshot and extract ONLY selected options "
-        "from 'Modellierungseigenschaften' section.\n\n"
-        
-        "Processing Rules:\n"
-        "1. Rename selected options as follows:\n"
-        "   - Contains 'Staging' → 'Staging-DataStore-Objekt'\n"
-        "   - Contains 'Eingangs' or Inbound → 'Nur Eingangs-Queue'\n"
-        "2. Automatically consider 'Staging-DataStore-Objekt' selected if 'Nur Eingangs-Queue' is selected\n"
-        "3. Ignore unselected/grayed-out options\n"
-        "4. Exclude fields containing these substrings:\n"
-        "   - 'Hot', 'Cold', 'Warm', 'Objektebene', 'Auf', 'Partitionsebene'\n"
-        "5. Never extract technical names or personal identifiers\n\n"
-        
-        "Output Format (strict JSON):\n"
+        "Analyze SAP BW Data Store Object screenshot. "
+        "Determine ONLY whether the 'Staging' option is selected in the 'Modellierungseigenschaften' section. "
+        "NORMALIZE names. Convert all into lower case. if they contain the following Substrings: 'staging' -> 'Staging-DataStore-Object' \n"
+        "Output format (strict JSON):\n"
         "{\n"
-        "  \"Staging-DataStore-Objekt\": : true|false\n"
-        "  \"Nur Eingangs-Queue\": : true|false\n"
-        "  ...\n"
+        "  \"Staging-DataStore-Object\": true|false\n"
         "}\n\n"
-    ),
+        "Rules:\n"
+        "- Return true ONLY if the Staging-DataStore-Object radio button or checkbox is visibly selected\n"
+        "- Return false if unselected, grayed out, or not present\n"
+        "- Output must contain ONLY this boolean value\n"
+        "- No additional fields or explanations" ),
 }
 
 def get_prompt(photo_type: str) -> str:
