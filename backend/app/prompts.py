@@ -7,6 +7,7 @@ PROMPTS = {
         "  \"Fields\": [\n"
         "    {\n"
         "      \"FieldName\": \"normalized_name\",\n"
+        "      \"Key\": true,\n"
         "      \"DataType\": \"DATA_TYPE\",\n"
         "      \"Length\": number\n"
         "    },\n"
@@ -30,6 +31,7 @@ PROMPTS = {
         
         "3. Technical Requirements:\n"
         "   - Include only: FieldName, Key, DataType, Length\n"
+        "   - Row is key if the checkebox is selected"
         "   - Maintain original data types (CHAR, DATS, etc.)\n"
         "   - Keep original length values\n"
         "   - Output must be system-agnostic and reusable\n\n"
@@ -39,6 +41,7 @@ PROMPTS = {
         "Analyze SAP BW4Cockpit table screenshot and extract structural metadata with these exact rules:\n\n"
         
         "1. COLUMN NAME PROCESSING:\n"
+        "   - It's ok, if the column is empty. That means, there is just column name and no value ex. in some case the colum 'date to' is empty\n"
         "   - Remove all technical suffixes (e.g., 'TE8 018')\n"
         "   - Apply these name replacements:\n"
         "     * Contains 'bereich' → 'Fachbereich'\n"
@@ -47,6 +50,7 @@ PROMPTS = {
         "     * Contains 'long' → 'Long text'\n"
         "     * Contains 'short' → 'Short text'\n"
         "     * Contains 'medium' → 'Medium text'\n"
+        "     * Contains 'calender' → 'Calender day'\n"
         "     * Just 'date' → 'Date'\n"
         "   - Output cleaned names in 'CleanedColumns' array\n\n"
         
@@ -124,11 +128,12 @@ PROMPTS = {
         "   - Return as JSON list under 'Columns' key\n"
         "   - Example: {'Columns': ['Header1', 'Header2', ...]}\n\n"
         
-        "2. For 'BW Reporting Vorschau' (or 'BW Reporting Preview') tables (there is a column named 'Key Figures'):\n"
-        "   - Ignore column 'Key Figures'\n"
+        "2. For 'BW Reporting Vorschau' (or 'BW Reporting Preview') tables (there are  columns named 'Key Figures' or 'Number of Records'):\n"
+        "   - Identify Row called 'Datenraster'\n"
+        "   - Ignore columns 'Key Figures'\n"
         "   - Extract BOTH column headers AND last row values\n"
         "   - Return as JSON object with headers as keys and last row as values\n"
-        "   - Example: {'Header1': 'Value1', 'Header2': 'Value2', ...}\n\n"
+        
         
         "3. Name Normalization.\n"
         "   - Convert all to lowercase. if they contain the following Substrings \n"
@@ -141,9 +146,10 @@ PROMPTS = {
         "   'valid from' = gueltig von, 'valid to'= 'gueltig bis'"
         
         "Processing Rules:\n"
-        "• Determine table type by its label before extraction\n"
+        "• Determine table type by its label before extraction ('Datenvorschau für DataSource' or 'BW Reporting Vorschau')\n"
+        ". REMOVE all technical identifiers (like TE007, TE 007 etc.)\n"
         ". Names of Column are unique"
-        "• For reporting previews, ONLY use the last row (totals row)\n"
+        "• For BW reporting previews ('BW Reporting Vorschau'), ONLY use the first row for Header and last row (totals row) for Value\n"
         "• Exclude all other interface elements and metadata\n"
         "• Return empty object {} if no recognized table found\n\n"
         
@@ -155,7 +161,7 @@ PROMPTS = {
         "- Case-sensitive headers\n"
         "- Ignore non-data UI elements"
         
-        "if the table is 'Datenvorschau für DataSource' (or 'DataSource Preview')  then return OUTPUT  in JSON format (German only) for 'Datenvorschau für DataSource':\n"
+        "if the table is 'Datenvorschau für DataSource' (or 'DataSource Preview') (there is no 'Key Figures'column)  then return OUTPUT  in JSON format (German only) for 'Datenvorschau für DataSource':\n"
         "{\n"
         "   \"Columns\": [\"header1\", \"header2\", ...] | null\n"
         "}"
@@ -254,6 +260,7 @@ PROMPTS = {
           " krz|kür: kuerzel,\n"
           " von|from: gueltig von,\n"
           " to|bis: gueltig bis,\n"
+          " date: date,\n"
           " bez|descri|extra long: Bezeichnung,\n"
         "6. Return ONLY these Target properties: field name (normalized), type, and key status "
          
@@ -324,15 +331,13 @@ PROMPTS = {
         "   - Name keys as 'Overall Result_1', 'Overall Result_2',... (left-to-right order)\n"
         "   Example: {\"Overall Result_1\": \"4,500\", \"Overall Result_2\": \"12%\"}\n\n"
         
-        "2. If ONLY 'Overall Result' COLUMN EXISTS:\n"
+        "2. If ONLY 'Overall Result' COLUMN  or ROW EXISTS  :\n"
         "   - Use the corresponding ROW name as key name\n"
-        "   - Extract the cell value from 'Overall Result' \n"
-        "   Example: {\"Region\": \"North\"}\n\n"
+        "   - Name keys as 'Overall Result_1', 'Overall Result_2',... (left-to-right order)\n"
         
         "3. If ONLY 'Overall Result' ROW EXISTS:\n"
         "   - Use COLUMN name as key names\n"
-        "   - Extract values from 'Overall Result' of the columns\n"
-        "   Example: {\"Total Sales\": \"1,234\", \"Profit\": \"567\"}\n\n"
+        "   - Name keys as 'Overall Result_1', 'Overall Result_2',... (left-to-right order)\n"
         
         "4. SPECIAL CASES:\n"
         "   - If multiple matches in scenario 2/3, number them sequentially\n"
